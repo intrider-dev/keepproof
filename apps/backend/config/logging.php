@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Shared\Logging\RedactSensitiveLogContext;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -101,8 +103,14 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter' => env('LOG_STDERR_FORMATTER'),
-            'processors' => [PsrLogMessageProcessor::class],
+            'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
+            'formatter_with' => [
+                'batchMode' => JsonFormatter::BATCH_MODE_JSON,
+                'appendNewline' => true,
+                'ignoreEmptyContextAndExtra' => true,
+                'includeStacktraces' => false,
+            ],
+            'processors' => [RedactSensitiveLogContext::class, PsrLogMessageProcessor::class],
         ],
 
         'syslog' => [
