@@ -165,8 +165,8 @@ On 2026-07-20:
 - A clean `reset` followed by `setup` completed in 188.4 seconds, including dependency installation, fresh PostgreSQL migrations, and the private-storage sentinel check.
 - The root quality gate completed in 89.8 seconds: Compose origin contracts, Composer validation and audit, Pint across 182 files, PHPStan/Larastan with no errors, 92 backend tests with 697 assertions, and both real Tesseract PNG/PDF contract tests passed inside the backend container.
 - Deadline Engine: Composer validation, PHPStan, and audit passed; 34 tests executed 46,276 assertions.
-- Frontend: Prettier, Redocly OpenAPI lint, generated-client drift check, ESLint, strict Vue TypeScript, 7 test files with 22 tests, production build, and the high-severity npm audit all passed.
-- The current Playwright run passed 10/10 tests in 37.0 seconds; the connected receipt lifecycle took 11.9 seconds and the public-origin session regression took 4.2 seconds. The complete wrapper, including origin checks, browser setup, both projects, and restoration of the normal development origin, completed in 116.4 seconds.
+- Frontend: Prettier, Redocly OpenAPI lint, generated-client drift check, ESLint, strict Vue TypeScript, 8 test files with 23 tests, production build, and the high-severity npm audit all passed.
+- The current Playwright run passed 12/12 tests in 40.9 seconds; the connected receipt lifecycle took 13.1 seconds and the public-origin session regression took 4.2 seconds. The complete wrapper, including browser setup, both projects, and restoration of the normal development origin, completed in 115.3 seconds.
 - The standalone root test command passed in 44.4 seconds. The production images built successfully, the non-root Nginx configuration passed `nginx -t`, and an ephemeral production-ingress smoke request returned HTTP 200.
 
 No coverage percentage is published because this run did not measure one. High assertion counts in the property tests are evidence of exercised inputs, not a substitute for risk-based review. The maintained risk-to-test mapping is in [Testing Strategy](TESTING.md).
@@ -204,7 +204,8 @@ These changes came from running the system rather than polishing the intended di
 6. **Internal Playwright HTTP is not a secure context.** `crypto.randomUUID()` existed in normal localhost browsers but not at `http://nginx`; the client now has a tested `getRandomValues` UUIDv4 fallback used by correlation IDs, upload idempotency, and local item IDs.
 7. **Signed email navigation did not look like a Sanctum XHR.** It had no origin/referrer and could not restore the API middleware session. The signed GET moved to the web-session middleware while retaining its `/api/v1` URL and signature.
 8. **The E2E test itself assumed uppercase ULIDs and ambiguous label matching.** Production emits lowercase ULIDs, and the confidence badge shares field terminology. The test now validates the alphabet case-insensitively and selects the date textbox by accessible role.
-9. **A separate FastAPI OCR service remained unjustified.** Local process adapters gave the needed timeout, command-array, queue, and image boundary with fewer deployment and privacy paths.
+9. **A notification route could corrupt subsequent SPA rendering.** The settings page passed a Vue reactive proxy to `structuredClone()`, which raises `DataCloneError` in browsers and left the nested router view empty. The form now takes an explicit typed snapshot, with component coverage and desktop/mobile navigation regression tests that assert every primary destination renders without a page error.
+10. **A separate FastAPI OCR service remained unjustified.** Local process adapters gave the needed timeout, command-array, queue, and image boundary with fewer deployment and privacy paths.
 
 ## Lessons learned
 
