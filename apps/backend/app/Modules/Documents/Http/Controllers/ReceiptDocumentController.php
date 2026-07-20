@@ -6,6 +6,7 @@ namespace App\Modules\Documents\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Documents\Actions\ConfirmExtraction;
+use App\Modules\Documents\Actions\DeleteReceiptOriginal;
 use App\Modules\Documents\Actions\RetryReceiptProcessing;
 use App\Modules\Documents\Actions\UploadReceipt;
 use App\Modules\Documents\Http\Requests\ConfirmExtractionRequest;
@@ -103,5 +104,17 @@ final class ReceiptDocumentController extends Controller
         $retried = $retryProcessing->execute($document, $correlationId);
 
         return (new ReceiptDocumentResource($retried->load('fields')))->response()->setStatusCode(202);
+    }
+
+    public function destroyOriginal(
+        Request $request,
+        Household $household,
+        ReceiptDocument $document,
+        DeleteReceiptOriginal $deleteOriginal,
+    ): ReceiptDocumentResource {
+        $this->authorize('delete', $document);
+        $updated = $deleteOriginal->execute($this->authenticatedUser($request), $document);
+
+        return new ReceiptDocumentResource($updated->load('fields'));
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounts\Http\Middleware\RequireRecentPasswordConfirmation;
 use App\Modules\Shared\Http\Middleware\AssignCorrelationId;
 use App\Modules\Shared\Http\ProblemDetails;
 use Illuminate\Auth\AuthenticationException;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(AssignCorrelationId::class);
         $middleware->statefulApi();
         $middleware->throttleApi('api');
+        $middleware->alias(['password.recent' => RequireRecentPasswordConfirmation::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

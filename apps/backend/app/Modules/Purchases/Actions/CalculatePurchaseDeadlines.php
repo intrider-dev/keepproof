@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchases\Actions;
 
+use App\Modules\Notifications\Actions\SchedulePurchaseReminders;
 use App\Modules\Purchases\Models\Purchase;
 use App\Modules\Purchases\Models\PurchaseDeadline;
 use DateTimeImmutable;
@@ -18,7 +19,10 @@ use KeepProof\DeadlineEngine\Value\PurchaseDeadlineRequest;
 
 final readonly class CalculatePurchaseDeadlines
 {
-    public function __construct(private DeadlineCalculator $calculator) {}
+    public function __construct(
+        private DeadlineCalculator $calculator,
+        private SchedulePurchaseReminders $scheduleReminders,
+    ) {}
 
     public function execute(Purchase $purchase): void
     {
@@ -43,6 +47,7 @@ final readonly class CalculatePurchaseDeadlines
 
         $this->persist($purchase, DeadlineKind::Return, $result->returnDeadline);
         $this->persist($purchase, DeadlineKind::Warranty, $result->warrantyDeadline);
+        $this->scheduleReminders->execute($purchase->refresh());
     }
 
     private function returnTerms(Purchase $purchase): ?DeadlineTerms
