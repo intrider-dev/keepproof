@@ -24,7 +24,7 @@ final class PurchaseController extends Controller
     public function index(ListPurchasesRequest $request, Household $household): AnonymousResourceCollection
     {
         $this->authorize('view', $household);
-        $query = $household->purchases()->with(['items', 'deadlines']);
+        $query = $household->purchases()->with(['items', 'deadlines', 'documents']);
 
         $search = $request->stringValue('search');
         if ($search !== null) {
@@ -84,7 +84,7 @@ final class PurchaseController extends Controller
     {
         $this->authorize('view', $purchase);
 
-        return new PurchaseResource($purchase->load(['items', 'deadlines']));
+        return new PurchaseResource($purchase->load(['items', 'deadlines', 'documents']));
     }
 
     public function update(

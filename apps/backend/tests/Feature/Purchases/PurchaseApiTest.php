@@ -137,6 +137,36 @@ final class PurchaseApiTest extends TestCase
         $this->assertDatabaseCount('purchases', 0);
     }
 
+    public function test_purchase_payload_exposes_safe_document_metadata_without_storage_keys(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        $purchase = Purchase::factory()->create([
+            'household_id' => $household->id,
+            'created_by_user_id' => $owner->id,
+        ]);
+        $document = $purchase->documents()->create([
+            'household_id' => $household->id,
+            'uploaded_by_user_id' => $owner->id,
+            'state' => 'ready',
+            'storage_disk' => 's3',
+            'storage_key' => 'opaque/private/key.png',
+            'original_filename' => 'receipt.png',
+            'mime_type' => 'image/png',
+            'size_bytes' => 8809,
+            'sha256' => hash('sha256', 'synthetic'),
+            'correlation_id' => fake()->uuid(),
+            'retain_original' => true,
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson('/api/v1/households/'.$household->id.'/purchases/'.$purchase->id)
+            ->assertOk()
+            ->assertJsonPath('data.documents.0.id', $document->id)
+            ->assertJsonPath('data.documents.0.filename', 'receipt.png')
+            ->assertJsonMissingPath('data.documents.0.storage_key')
+            ->assertJsonMissing(['opaque/private/key.png']);
+    }
+
     public function test_delete_cascades_items_and_deadlines_and_records_an_audit_event(): void
     {
         [$owner, $household] = $this->householdWithOwner('Owner');

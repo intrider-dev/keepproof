@@ -7,6 +7,7 @@ namespace App\Modules\Accounts\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Shared\Audit\AuditRecorder;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -23,8 +24,12 @@ final class EmailVerificationController extends Controller
         return response()->noContent();
     }
 
-    public function verify(Request $request, string $id, string $hash, AuditRecorder $audit): Response
-    {
+    public function verify(
+        Request $request,
+        string $id,
+        string $hash,
+        AuditRecorder $audit,
+    ): Response|RedirectResponse {
         $user = $this->authenticatedUser($request);
 
         abort_unless(
@@ -38,6 +43,15 @@ final class EmailVerificationController extends Controller
             $audit->record('account.email_verified', $user, subject: $user);
         }
 
-        return response()->noContent();
+        if ($request->expectsJson()) {
+            return response()->noContent();
+        }
+
+        $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+        if (! is_string($frontendUrl)) {
+            $frontendUrl = 'http://localhost:5173';
+        }
+
+        return redirect()->away(rtrim($frontendUrl, '/').'/verify-email?verified=1');
     }
 }

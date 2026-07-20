@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchases\Http\Resources;
 
+use App\Modules\Documents\Http\Resources\PurchaseDocumentResource;
 use App\Modules\Purchases\Models\Purchase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -46,6 +47,7 @@ final class PurchaseResource extends JsonResource
             'notes' => $purchase->notes,
             'items' => PurchaseItemResource::collection($this->whenLoaded('items')),
             'deadlines' => PurchaseDeadlineResource::collection($this->whenLoaded('deadlines')),
+            'documents' => PurchaseDocumentResource::collection($this->whenLoaded('documents')),
             'activated_at' => $purchase->activated_at?->toAtomString(),
             'created_at' => $purchase->created_at?->toAtomString(),
             'updated_at' => $purchase->updated_at?->toAtomString(),

@@ -181,6 +181,23 @@ final class AuthenticationApiTest extends TestCase
         $this->assertFalse($other->refresh()->hasVerifiedEmail());
     }
 
+    public function test_browser_email_verification_returns_to_the_spa(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(10),
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+        );
+
+        $this->actingAs($user)
+            ->withHeader('Accept', 'text/html')
+            ->get($verificationUrl)
+            ->assertRedirect('http://localhost:5173/verify-email?verified=1');
+
+        $this->assertTrue($user->refresh()->hasVerifiedEmail());
+    }
+
     public function test_password_reset_uses_a_single_use_broker_token(): void
     {
         Notification::fake();

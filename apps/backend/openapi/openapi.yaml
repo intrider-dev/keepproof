@@ -789,7 +789,7 @@ components:
         locale: { type: string, enum: [en] }
     User:
       type: object
-      required: [id, name, email, timezone, locale, email_verified]
+      required: [id, name, email, timezone, locale, email_verified, households]
       properties:
         id: { $ref: "#/components/schemas/Ulid" }
         name: { type: string }
@@ -797,7 +797,10 @@ components:
         timezone: { type: string }
         locale: { type: string }
         email_verified: { type: boolean }
-        email_verified_at: { type: [string, "null"], format: date-time }
+        households:
+          type: array
+          items: { $ref: "#/components/schemas/Household" }
+        created_at: { type: string, format: date-time }
     UserResponse:
       type: object
       required: [data]
@@ -954,6 +957,7 @@ components:
         notes: { type: [string, "null"] }
         items: { type: array, items: { $ref: "#/components/schemas/PurchaseItem" } }
         deadlines: { type: array, items: { $ref: "#/components/schemas/Deadline" } }
+        documents: { type: array, items: { $ref: "#/components/schemas/PurchaseDocument" } }
         activated_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -972,6 +976,17 @@ components:
     DocumentState:
       type: string
       enum: [uploaded, validation_pending, processing, needs_review, ready, failed, quarantined]
+    PurchaseDocument:
+      type: object
+      required: [id, state, filename, mime_type, size_bytes, retain_original]
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        state: { $ref: "#/components/schemas/DocumentState" }
+        filename: { type: string }
+        mime_type: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        size_bytes: { type: integer, minimum: 1 }
+        retain_original: { type: boolean }
+        processed_at: { type: [string, "null"], format: date-time }
     ExtractionField:
       type: object
       required: [key, value, normalized_value, confidence, source, validation_errors, confirmed_value]

@@ -31,7 +31,8 @@ export type User = {
     timezone: string;
     locale: string;
     email_verified: boolean;
-    email_verified_at?: string | null;
+    households: Array<Household>;
+    created_at?: string;
 };
 
 export type UserResponse = {
@@ -155,6 +156,7 @@ export type Purchase = {
     notes?: string | null;
     items: Array<PurchaseItem>;
     deadlines: Array<Deadline>;
+    documents?: Array<PurchaseDocument>;
     activated_at?: string | null;
     created_at?: string;
     updated_at?: string;
@@ -171,6 +173,16 @@ export type PurchaseCollection = {
 };
 
 export type DocumentState = 'uploaded' | 'validation_pending' | 'processing' | 'needs_review' | 'ready' | 'failed' | 'quarantined';
+
+export type PurchaseDocument = {
+    id: Ulid;
+    state: DocumentState;
+    filename: string;
+    mime_type: 'image/jpeg' | 'image/png' | 'application/pdf';
+    size_bytes: number;
+    retain_original: boolean;
+    processed_at?: string | null;
+};
 
 export type ExtractionField = {
     key: string;
