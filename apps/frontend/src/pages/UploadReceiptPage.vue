@@ -83,6 +83,15 @@ const processReceipt = async (): Promise<void> => {
       description="Upload a receipt now, then review every extracted detail before any deadline becomes active."
     />
 
+    <nav class="entry-methods" aria-label="Choose how to add a purchase">
+      <RouterLink class="entry-methods__active" to="/app/purchases/new" aria-current="page">
+        <AppIcon name="upload" :size="18" /> Upload a receipt
+      </RouterLink>
+      <RouterLink to="/app/purchases/new/manual">
+        <AppIcon name="edit" :size="18" /> Enter manually
+      </RouterLink>
+    </nav>
+
     <ol class="stepper" aria-label="Upload progress">
       <li :class="{ 'stepper__item--active': step === 1, 'stepper__item--complete': step > 1 }">
         <span>{{ step > 1 ? '✓' : '1' }}</span>

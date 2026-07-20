@@ -9,13 +9,24 @@ import { appStore } from '../stores/app'
 import { validateRegistration, type ValidationErrors } from '../validation'
 
 const router = useRouter()
-const form = reactive({ name: '', email: '', password: '', timezone: 'America/New_York' })
+const form = reactive({
+  name: '',
+  email: '',
+  password: '',
+  passwordConfirmation: '',
+  timezone: 'America/New_York',
+})
 const errors = ref<ValidationErrors>({})
 const requestError = ref('')
 const busy = ref(false)
 const submit = async (): Promise<void> => {
   if (busy.value) return
-  errors.value = validateRegistration(form.name, form.email, form.password)
+  errors.value = validateRegistration(
+    form.name,
+    form.email,
+    form.password,
+    form.passwordConfirmation,
+  )
   requestError.value = ''
   if (Object.keys(errors.value).length) return
 
@@ -24,8 +35,11 @@ const submit = async (): Promise<void> => {
     const response = await apiRequest<UserResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({
-        ...form,
-        password_confirmation: form.password,
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        password_confirmation: form.passwordConfirmation,
+        timezone: form.timezone,
         locale: 'en',
       }),
     })
@@ -98,6 +112,27 @@ const submit = async (): Promise<void> => {
           <p id="register-password-help" class="field-hint">Use at least 12 characters.</p>
           <p v-if="errors.password" id="register-password-error" class="field-error">
             {{ errors.password }}
+          </p>
+        </div>
+        <div class="field">
+          <label for="register-password-confirmation">Confirm password</label>
+          <input
+            id="register-password-confirmation"
+            v-model="form.passwordConfirmation"
+            class="input"
+            type="password"
+            autocomplete="new-password"
+            :aria-invalid="Boolean(errors.passwordConfirmation)"
+            :aria-describedby="
+              errors.passwordConfirmation ? 'register-password-confirmation-error' : undefined
+            "
+          />
+          <p
+            v-if="errors.passwordConfirmation"
+            id="register-password-confirmation-error"
+            class="field-error"
+          >
+            {{ errors.passwordConfirmation }}
           </p>
         </div>
         <div class="field">

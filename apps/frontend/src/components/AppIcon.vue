@@ -15,6 +15,9 @@ export type IconName =
   | 'arrow'
   | 'file'
   | 'logout'
+  | 'edit'
+  | 'close'
+  | 'info'
   | 'spark'
 
 defineProps<{ name: IconName; size?: number }>()
@@ -90,6 +93,17 @@ defineProps<{ name: IconName; size?: number }>()
     <template v-else-if="name === 'logout'">
       <path d="M10 17l5-5-5-5M15 12H3" />
       <path d="M13 3h8v18h-8" />
+    </template>
+    <template v-else-if="name === 'edit'">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+    </template>
+    <template v-else-if="name === 'close'">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </template>
+    <template v-else-if="name === 'info'">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
     </template>
     <template v-else>
       <path d="m12 3 1.3 4.7L18 9l-4.7 1.3L12 15l-1.3-4.7L6 9l4.7-1.3L12 3Z" />

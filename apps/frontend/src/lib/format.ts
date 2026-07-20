@@ -1,3 +1,5 @@
+import { currencyFractionDigits } from './money'
+
 export const formatDate = (
   isoDate: string,
   options: Intl.DateTimeFormatOptions = {
@@ -15,7 +17,7 @@ export const formatMoney = (minorUnits: number, currency: string): string =>
   new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
-  }).format(minorUnits / 100)
+  }).format(minorUnits / 10 ** (currencyFractionDigits(currency) ?? 2))
 
 export const deadlineDistance = (daysLeft: number): string => {
   if (daysLeft < 0) return `${Math.abs(daysLeft)} days ago`

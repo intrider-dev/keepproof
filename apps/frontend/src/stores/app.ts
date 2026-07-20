@@ -5,11 +5,14 @@ import type {
   NotificationPreferencesResponse,
   Purchase as ApiPurchase,
   PurchaseCollection,
+  PurchaseInput,
+  PurchaseResponse,
   ReceiptDocument as ApiReceiptDocument,
   ReceiptDocumentResponse,
   UserResponse,
 } from '../api/generated'
 import { ApiProblem, apiRequest } from '../lib/api'
+import { minorToDecimal, parseMoneyToMinor } from '../lib/money'
 import {
   defaultNotificationPreferences,
   documentFixtures,
@@ -233,7 +236,7 @@ const confirmDemoExtraction = (documentId: string, values: Record<string, string
   purchase.orderNumber = values.orderNumber ?? ''
   purchase.currency = values.currency ?? purchase.currency
   purchase.country = values.country ?? purchase.country
-  purchase.totalMinor = Math.round(Number(values.total ?? '0') * 100)
+  purchase.totalMinor = parseMoneyToMinor(values.total ?? '', values.currency ?? '') ?? 0
   purchase.items = [
     {
       id: `item-${purchase.id}`,
@@ -299,6 +302,93 @@ const deleteDemoAccount = (): void => {
   resetFixtures()
   state.isAuthenticated = false
   state.demoMode = false
+}
+
+const addDemoPeriod = (
+  isoDate: string,
+  quantity: number,
+  unit: 'days' | 'months' | 'years',
+): string => {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  if (!year || !month || !day) return isoDate
+
+  if (unit === 'days') {
+    const date = new Date(Date.UTC(year, month - 1, day + quantity))
+    return date.toISOString().slice(0, 10)
+  }
+
+  const monthOffset = unit === 'years' ? quantity * 12 : quantity
+  const targetMonth = month - 1 + monthOffset
+  const targetYear = year + Math.floor(targetMonth / 12)
+  const normalizedMonth = ((targetMonth % 12) + 12) % 12
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(targetYear, normalizedMonth, Math.min(day, lastDay)))
+    .toISOString()
+    .slice(0, 10)
+}
+
+const demoDeadline = (
+  purchaseId: string,
+  kind: Deadline['type'],
+  purchaseDate: string,
+  quantity: number | null | undefined,
+  unit: 'days' | 'months' | 'years' | null | undefined,
+): Deadline | undefined => {
+  if (!quantity || !unit) return undefined
+  const dueOn = addDemoPeriod(purchaseDate, quantity, unit)
+  const due = Date.parse(`${dueOn}T00:00:00Z`)
+  const today = new Date()
+  const startOfToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  const daysLeft = Math.ceil((due - startOfToday) / 86_400_000)
+
+  return {
+    id: `deadline-${purchaseId}-${kind}`,
+    type: kind,
+    dueOn,
+    daysLeft,
+    urgency: deadlineUrgency(daysLeft),
+    rule: `${quantity} calendar ${unit}`,
+    explanation: 'Synthetic demo preview. The connected API returns the authoritative rule trace.',
+    reminders: kind === 'return' ? [7, 3, 1] : [30, 7],
+  }
+}
+
+const createDemoManualPurchase = (input: PurchaseInput): string => {
+  const id = `purchase-manual-${Date.now()}`
+  const purchase: Purchase = {
+    id,
+    status: 'active',
+    merchant: input.merchant,
+    purchaseDate: input.purchase_date,
+    orderNumber: input.receipt_number ?? '',
+    currency: input.currency,
+    totalMinor: input.total_minor,
+    country: countryName(input.country_region),
+    notes: input.notes ?? '',
+    items: input.items.map((item, index) => ({
+      id: `item-${id}-${index + 1}`,
+      name: item.name,
+      quantity: item.quantity,
+      unitPriceMinor: item.unit_price_minor ?? 0,
+    })),
+    returnDeadline: demoDeadline(
+      id,
+      'return',
+      input.purchase_date,
+      input.return_period_quantity,
+      input.return_period_unit,
+    ),
+    warrantyDeadline: demoDeadline(
+      id,
+      'warranty',
+      input.purchase_date,
+      input.warranty_period_quantity,
+      input.warranty_period_unit,
+    ),
+  }
+  state.purchases.unshift(purchase)
+  showToast('Synthetic manual purchase added.')
+  return id
 }
 
 type SessionUserResponse = UserResponse
@@ -418,12 +508,13 @@ const remoteField = (
 }
 
 const mapDocument = (document: ApiReceiptDocument): ReceiptDocument => {
+  const currency = remoteField(document, 'currency', 'currency', 'Currency', 'USD')
   const total = remoteField(document, 'total_minor', 'total', 'Total', '0.00', {
     inputMode: 'decimal',
   })
   const totalMinor = Number(total.value)
-  if (Number.isInteger(totalMinor) && totalMinor >= 100 && !total.value.includes('.')) {
-    total.value = (totalMinor / 100).toFixed(2)
+  if (Number.isInteger(totalMinor) && totalMinor >= 0 && !total.value.includes('.')) {
+    total.value = minorToDecimal(totalMinor, currency.value)
     total.normalizedValue = total.value
   }
 
@@ -439,7 +530,7 @@ const mapDocument = (document: ApiReceiptDocument): ReceiptDocument => {
         type: 'date',
       }),
       remoteField(document, 'receipt_number', 'orderNumber', 'Receipt number', ''),
-      remoteField(document, 'currency', 'currency', 'Currency', 'USD'),
+      currency,
       remoteField(document, 'country_region', 'country', 'Country or region', 'US'),
       total,
       remoteField(document, 'item_name', 'itemName', 'Item', ''),
@@ -600,7 +691,8 @@ const confirmExtraction = async (
   if (state.demoMode) return confirmDemoExtraction(documentId, values)
   if (!state.user.householdId) throw new Error('No household is selected.')
 
-  const totalMinor = Math.round(Number(values.total ?? '0') * 100)
+  const totalMinor = parseMoneyToMinor(values.total ?? '', values.currency ?? '')
+  if (totalMinor === undefined) throw new Error('Enter a valid total for the selected currency.')
   const response = await apiRequest<ReceiptDocumentResponse>(
     `/households/${state.user.householdId}/documents/${documentId}/confirmation`,
     {
@@ -637,6 +729,22 @@ const confirmExtraction = async (
   await hydrateRemoteWorkspace()
   showToast('Purchase confirmed. Your deadlines are now active.')
   return purchaseId
+}
+
+const createManualPurchase = async (input: PurchaseInput): Promise<string> => {
+  if (state.demoMode) return createDemoManualPurchase(input)
+  if (!state.user.householdId) throw new Error('No household is selected.')
+
+  const response = await apiRequest<PurchaseResponse>(
+    `/households/${state.user.householdId}/purchases`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+  await hydrateRemoteWorkspace()
+  showToast('Purchase added. Your deadlines are active.')
+  return response.data.id
 }
 
 const addMember = async (email: string): Promise<void> => {
@@ -711,6 +819,7 @@ export const appStore = {
   documentById,
   uploadReceipt,
   confirmExtraction,
+  createManualPurchase,
   addMember,
   updatePreferences,
   deleteAccount,

@@ -89,7 +89,7 @@ const submit = async (): Promise<void> => {
         <div class="field">
           <div class="label-row">
             <label for="login-password">Password</label>
-            <span class="muted-label">12+ characters</span>
+            <RouterLink class="inline-link" to="/forgot-password">Forgot password?</RouterLink>
           </div>
           <input
             id="login-password"

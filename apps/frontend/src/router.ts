@@ -4,12 +4,15 @@ import AppShell from './components/AppShell.vue'
 import LandingPage from './pages/LandingPage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import RegisterPage from './pages/RegisterPage.vue'
+import ForgotPasswordPage from './pages/ForgotPasswordPage.vue'
+import ResetPasswordPage from './pages/ResetPasswordPage.vue'
 import EmailVerificationPage from './pages/EmailVerificationPage.vue'
 import DemoEntryPage from './pages/DemoEntryPage.vue'
 import DashboardPage from './pages/DashboardPage.vue'
 import PurchaseListPage from './pages/PurchaseListPage.vue'
 import PurchaseDetailPage from './pages/PurchaseDetailPage.vue'
 import UploadReceiptPage from './pages/UploadReceiptPage.vue'
+import ManualPurchasePage from './pages/ManualPurchasePage.vue'
 import ExtractionReviewPage from './pages/ExtractionReviewPage.vue'
 import DeadlinesPage from './pages/DeadlinesPage.vue'
 import NotificationSettingsPage from './pages/NotificationSettingsPage.vue'
@@ -25,6 +28,8 @@ const router = createRouter({
     { path: '/', component: LandingPage, meta: { title: 'Private receipt tracking' } },
     { path: '/login', component: LoginPage, meta: { title: 'Sign in' } },
     { path: '/register', component: RegisterPage, meta: { title: 'Create account' } },
+    { path: '/forgot-password', component: ForgotPasswordPage, meta: { title: 'Reset password' } },
+    { path: '/reset-password', component: ResetPasswordPage, meta: { title: 'Choose a password' } },
     {
       path: '/verify-email',
       component: EmailVerificationPage,
@@ -56,6 +61,11 @@ const router = createRouter({
           path: 'purchases/new',
           component: UploadReceiptPage,
           meta: { requiresAuth: true, title: 'Add a purchase' },
+        },
+        {
+          path: 'purchases/new/manual',
+          component: ManualPurchasePage,
+          meta: { requiresAuth: true, title: 'Enter a purchase' },
         },
         {
           path: 'purchases/:id',
