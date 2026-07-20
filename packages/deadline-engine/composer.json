@@ -1,0 +1,45 @@
+{
+    "name": "keepproof/deadline-engine",
+    "description": "Framework-agnostic purchase return and warranty deadline calculations.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "deadline",
+        "returns",
+        "warranty"
+    ],
+    "require": {
+        "php": "^8.5"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^12.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "KeepProof\\DeadlineEngine\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "KeepProof\\DeadlineEngine\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --colors=always",
+        "analyse": "phpstan analyse --no-progress",
+        "security": "@composer audit --locked --no-interaction",
+        "check": [
+            "@composer validate --strict",
+            "@analyse",
+            "@test",
+            "@security"
+        ]
+    },
+    "config": {
+        "allow-plugins": {},
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
