@@ -59,13 +59,13 @@ Relevant files: [`SchedulePurchaseReminders.php`](../apps/backend/app/Modules/No
 - The application generates an opaque key; the original name cannot affect the path.
 - Objects use private S3 visibility and a SHA-256 integrity value.
 - The worker verifies checksum/signature and quarantines PDFs with known active/embedded-content markers.
-- An authorized POST creates a short-lived signed URL; quarantined or removed originals return 404.
+- An authorized POST creates a short-lived relative application URL. Its GET requires the active session, validates the signature, re-authorizes household membership, rechecks quarantine/retention state, and streams from the internal-only storage endpoint.
 - Signed URLs, storage keys, OCR text, and document contents are redacted from structured logs.
 - Account deletion removes owned private objects before removing relational identity; original deletion is also available per receipt.
 
 The current product has no antivirus/CDR service and no explicit upload-time PDF page-count rejection; those are documented production limitations.
 
-Relevant files: [`SanitizeReceiptUpload.php`](../apps/backend/app/Modules/Documents/Actions/SanitizeReceiptUpload.php), [`ValidateReceiptContent.php`](../apps/backend/app/Modules/Documents/Actions/ValidateReceiptContent.php), and [ADR 0005](adr/0005-private-s3-compatible-storage.md).
+Relevant files: [`SanitizeReceiptUpload.php`](../apps/backend/app/Modules/Documents/Actions/SanitizeReceiptUpload.php), [`ValidateReceiptContent.php`](../apps/backend/app/Modules/Documents/Actions/ValidateReceiptContent.php), [`ReceiptDocumentController.php`](../apps/backend/app/Modules/Documents/Http/Controllers/ReceiptDocumentController.php), [ADR 0005](adr/0005-private-s3-compatible-storage.md), and [ADR 0008](adr/0008-same-origin-receipt-download-gateway.md).
 
 ## How is a tenant data leak prevented?
 
@@ -94,7 +94,7 @@ Only if profiling shows a meaningful runtime, resource, fault-isolation, or team
 1. Freeze or dual-record new object writes for a bounded migration window.
 2. Copy private objects from the old S3-compatible bucket to the target using exact keys and encryption/retention policy.
 3. Compare object counts, sizes, and stored SHA-256 values against PostgreSQL; sample full reads.
-4. Test signed downloads, claim exports, deletion, and readiness in an isolated environment.
+4. Test signed application downloads, claim exports, deletion, and readiness in an isolated environment.
 5. Switch Flysystem endpoint/credentials, monitor reads, then keep the old bucket read-only for the approved rollback period.
 6. Destroy the old copy only after retention, backup, and erasure requirements are satisfied.
 

@@ -19,6 +19,8 @@ use App\Modules\Shared\Audit\AuditRecorder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class ReceiptDocumentController extends Controller
 {
@@ -66,13 +68,11 @@ final class ReceiptDocumentController extends Controller
         $minutes = config('receipt_processing.signed_url_minutes', 5);
         $ttl = is_int($minutes) ? min(max($minutes, 1), 15) : 5;
         $expiresAt = now()->addMinutes($ttl);
-        $url = Storage::disk($document->storage_disk)->temporaryUrl(
-            $document->storage_key,
+        $url = URL::temporarySignedRoute(
+            'receipt.original.download',
             $expiresAt,
-            [
-                'ResponseContentType' => $document->mime_type,
-                'ResponseContentDisposition' => 'attachment; filename="'.$this->downloadFilename($document).'"',
-            ],
+            ['documentId' => $document->id],
+            absolute: false,
         );
         $audit->record('receipt.download_url_created', $this->authenticatedUser($request), $household, $document, [
             'expires_in_seconds' => $ttl * 60,
@@ -86,14 +86,28 @@ final class ReceiptDocumentController extends Controller
         ])->header('Cache-Control', 'private, no-store');
     }
 
-    private function downloadFilename(ReceiptDocument $document): string
+    public function serveOriginal(string $documentId): StreamedResponse
     {
-        return match ($document->mime_type) {
-            'image/jpeg' => 'receipt.jpg',
-            'image/png' => 'receipt.png',
-            'application/pdf' => 'receipt.pdf',
-            default => 'receipt',
-        };
+        $document = ReceiptDocument::query()->findOrFail($documentId);
+        $this->authorize('view', $document);
+        abort_if(
+            $document->state === DocumentState::Quarantined || ! $document->retain_original,
+            404,
+        );
+
+        $storage = Storage::disk($document->storage_disk);
+        abort_unless($storage->exists($document->storage_key), 404);
+
+        return $storage->download(
+            $document->storage_key,
+            $this->downloadFilename($document),
+            [
+                'Content-Type' => $document->mime_type,
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'Pragma' => 'no-cache',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
     }
 
     public function confirm(
@@ -140,5 +154,15 @@ final class ReceiptDocumentController extends Controller
         $updated = $deleteOriginal->execute($this->authenticatedUser($request), $document);
 
         return new ReceiptDocumentResource($updated->load('fields'));
+    }
+
+    private function downloadFilename(ReceiptDocument $document): string
+    {
+        return match ($document->mime_type) {
+            'image/jpeg' => 'receipt.jpg',
+            'image/png' => 'receipt.png',
+            'application/pdf' => 'receipt.pdf',
+            default => 'receipt',
+        };
     }
 }

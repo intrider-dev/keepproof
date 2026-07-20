@@ -1279,10 +1279,13 @@ export type CreateReceiptDownloadUrlError = CreateReceiptDownloadUrlErrors[keyof
 
 export type CreateReceiptDownloadUrlResponses = {
     /**
-     * Short-lived signed private-object URL.
+     * Relative signed application URL. The exact URL requires the current authenticated session and streams the private object without exposing the storage endpoint.
      */
     200: {
         data: {
+            /**
+             * Relative same-origin URL including the bounded expiry and signature.
+             */
             url: string;
             expires_at: string;
         };
@@ -1290,6 +1293,48 @@ export type CreateReceiptDownloadUrlResponses = {
 };
 
 export type CreateReceiptDownloadUrlResponse = CreateReceiptDownloadUrlResponses[keyof CreateReceiptDownloadUrlResponses];
+
+export type DownloadReceiptOriginalData = {
+    body?: never;
+    path: {
+        documentId: Ulid;
+    };
+    query: {
+        expires: number;
+        signature: string;
+    };
+    url: '/api/v1/receipt-downloads/{documentId}';
+};
+
+export type DownloadReceiptOriginalErrors = {
+    /**
+     * Authentication is required.
+     */
+    401: ProblemDetails;
+    /**
+     * The action is not authorized.
+     */
+    403: ProblemDetails;
+    /**
+     * The resource is missing or hidden by tenant isolation.
+     */
+    404: ProblemDetails;
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
+};
+
+export type DownloadReceiptOriginalError = DownloadReceiptOriginalErrors[keyof DownloadReceiptOriginalErrors];
+
+export type DownloadReceiptOriginalResponses = {
+    /**
+     * Original receipt with a trusted attachment filename.
+     */
+    200: string;
+};
+
+export type DownloadReceiptOriginalResponse = DownloadReceiptOriginalResponses[keyof DownloadReceiptOriginalResponses];
 
 export type RetryReceiptProcessingData = {
     body?: never;

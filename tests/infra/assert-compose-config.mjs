@@ -14,10 +14,22 @@ const mode = process.argv[2];
 const expected = process.argv[3];
 const config = JSON.parse(input);
 const backend = config.services?.backend?.environment;
+const objectStorage = config.services?.["object-storage"];
 
 assert.ok(
     backend,
     "The rendered Compose configuration must contain backend environment values.",
+);
+assert.equal(backend.AWS_ENDPOINT, "http://object-storage:8333");
+assert.equal(backend.AWS_URL, undefined);
+assert.ok(
+    objectStorage,
+    "The rendered Compose configuration must contain object storage.",
+);
+assert.equal(
+    objectStorage.ports?.length ?? 0,
+    0,
+    "Private object storage must not publish a host port.",
 );
 
 if (mode === "development") {

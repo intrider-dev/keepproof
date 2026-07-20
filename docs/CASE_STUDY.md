@@ -79,7 +79,7 @@ Top-level email verification navigation required one deliberate exception: the s
 
 ### Private S3-compatible evidence
 
-The backend content-sniffs uploads, enforces 10 MiB and image-dimension limits, re-encodes images, derives safe display names, calculates SHA-256, and generates the object key. The original filename never controls storage. Objects are private; authorized downloads create short-lived signed URLs; quarantined/deleted originals are denied.
+The backend content-sniffs uploads, enforces 10 MiB and image-dimension limits, re-encodes images, derives safe display names, calculates SHA-256, and generates the object key. The original filename never controls storage. Objects remain on the internal network. An authorized POST mints a short-lived relative application URL; its GET requires the session, signature, tenant Policy, and a currently downloadable document before the backend streams the object. Quarantined/deleted originals are denied even if a URL was minted earlier.
 
 S3 and PostgreSQL cannot commit together. Upload sanitizes and writes the object, then commits relational state; a database exception triggers compensating object deletion. Queue publication happens after the durable row. This is simpler and more honest than pretending a distributed transaction exists.
 
@@ -186,6 +186,7 @@ Hardware, dataset, exact command, all latency values, and limitations are in [Lo
 
 - **One database enables useful atomicity but creates a shared scaling boundary.** That is appropriate for the current workflow and team size.
 - **S3 compensation is explicit but not atomic.** A production deployment needs orphan detection and a tested restore/erasure procedure.
+- **Same-origin receipt delivery spends backend bandwidth.** It avoids exposing storage topology and lets access be re-authorized at consumption time; the 10 MiB upload bound keeps this acceptable for the current product. A measured larger-scale deployment could use a separately configured public S3/CDN signing endpoint.
 - **Database state plus lease reconciliation covers document dispatch, not every possible event.** It avoids outbox complexity while the number of recoverable async intents is small.
 - **Human review reduces automation speed.** It is retained because deadline correctness and user trust matter more than removing one step.
 - **Local OCR improves privacy but is less accurate than some managed services.** Manual entry and field-level review keep the product functional.
@@ -205,7 +206,8 @@ These changes came from running the system rather than polishing the intended di
 7. **Signed email navigation did not look like a Sanctum XHR.** It had no origin/referrer and could not restore the API middleware session. The signed GET moved to the web-session middleware while retaining its `/api/v1` URL and signature.
 8. **The E2E test itself assumed uppercase ULIDs and ambiguous label matching.** Production emits lowercase ULIDs, and the confidence badge shares field terminology. The test now validates the alphabet case-insensitively and selects the date textbox by accessible role.
 9. **A notification route could corrupt subsequent SPA rendering.** The settings page passed a Vue reactive proxy to `structuredClone()`, which raises `DataCloneError` in browsers and left the nested router view empty. The form now takes an explicit typed snapshot, with component coverage and desktop/mobile navigation regression tests that assert every primary destination renders without a page error.
-10. **A separate FastAPI OCR service remained unjustified.** Local process adapters gave the needed timeout, command-array, queue, and image boundary with fewer deployment and privacy paths.
+10. **An S3 URL crossed the wrong DNS boundary.** Flysystem signed the internal `object-storage` endpoint, which containers can resolve but a host browser cannot. Replacing the host after signing would invalidate SigV4. Receipt downloads now use an authenticated, relative application signature and a bounded backend stream; object storage no longer publishes a host port. PHP tests cover signature tampering, authentication, tenancy, revocation, headers, and bytes, while the connected browser test inspects the real PNG download.
+11. **A separate FastAPI OCR service remained unjustified.** Local process adapters gave the needed timeout, command-array, queue, and image boundary with fewer deployment and privacy paths.
 
 ## Lessons learned
 

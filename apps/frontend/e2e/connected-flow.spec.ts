@@ -170,6 +170,28 @@ test.describe('connected receipt lifecycle', () => {
       const claim = await readFile(claimPath as string)
       expect(claim.subarray(0, 2).toString('ascii')).toBe('PK')
 
+      const receiptLinkResponsePromise = ownerPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/download') && response.request().method() === 'POST',
+      )
+      const receiptDownloadPromise = ownerPage.waitForEvent('download')
+      await ownerPage.getByRole('button', { name: 'Download receipt' }).click()
+      const receiptLinkResponse = await receiptLinkResponsePromise
+      expect(receiptLinkResponse.status()).toBe(200)
+      const receiptLink = (await receiptLinkResponse.json()) as {
+        data: { url: string; expires_at: string }
+      }
+      expect(receiptLink.data.url).toMatch(/^\/api\/v1\/receipt-downloads\//)
+      expect(receiptLink.data.url).not.toContain('object-storage')
+      const receiptDownload = await receiptDownloadPromise
+      expect(receiptDownload.suggestedFilename()).toBe('receipt.png')
+      const receiptPath = await receiptDownload.path()
+      expect(receiptPath).not.toBeNull()
+      const receipt = await readFile(receiptPath as string)
+      expect(receipt.subarray(0, 8)).toEqual(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      )
+
       await ownerPage.goto('/app/dashboard')
       await expect(ownerPage.getByText(/reminder scheduled/i).first()).toBeVisible()
 

@@ -24,6 +24,7 @@ use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -374,23 +375,23 @@ final class ReceiptWorkflowTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_private_download_url_is_bounded_audited_and_contains_no_storage_key(): void
+    public function test_private_download_uses_a_bounded_same_origin_gateway_and_streams_verified_content(): void
     {
         [$owner, $household] = $this->householdWithOwner('Alex');
         $document = $this->uploadImage($owner, $household, 'upload-proof-0010');
         $this->process($document, new DeterministicFixtureExtractor);
-        Storage::disk('receipts')->buildTemporaryUrlsUsing(
-            fn (string $path, \DateTimeInterface $expiration, array $options): string => 'https://objects.keepproof.test/private-download',
-        );
 
         $response = $this->actingAs($owner)
             ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
-            ->assertOk()
-            ->assertJsonPath('data.url', 'https://objects.keepproof.test/private-download');
+            ->assertOk();
 
         $cacheControl = (string) $response->headers->get('Cache-Control');
         self::assertStringContainsString('private', $cacheControl);
         self::assertStringContainsString('no-store', $cacheControl);
+        $url = $response->json('data.url');
+        self::assertIsString($url);
+        self::assertStringStartsWith('/api/v1/receipt-downloads/'.$document->id.'?', $url);
+        self::assertStringNotContainsString('object-storage', $url);
         self::assertStringNotContainsString($document->storage_key, (string) $response->getContent());
         $expiresAt = $response->json('data.expires_at');
         self::assertIsString($expiresAt);
@@ -407,20 +408,66 @@ final class ReceiptWorkflowTest extends TestCase
             ->value('metadata');
         self::assertIsString($metadata);
         self::assertStringNotContainsString($document->storage_key, $metadata);
-        self::assertStringNotContainsString('private-download', $metadata);
+        self::assertStringNotContainsString('receipt-downloads', $metadata);
+
+        $download = $this->actingAs($owner)->get($url)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $downloadCacheControl = (string) $download->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $downloadCacheControl);
+        self::assertStringContainsString('no-store', $downloadCacheControl);
+        self::assertStringContainsString('max-age=0', $downloadCacheControl);
+        $contentDisposition = (string) $download->headers->get('Content-Disposition');
+        self::assertStringContainsString('attachment', $contentDisposition);
+        self::assertStringContainsString('receipt.png', $contentDisposition);
+        self::assertStringStartsWith("\x89PNG\r\n\x1a\n", $download->streamedContent());
     }
 
-    public function test_quarantined_or_deleted_original_never_receives_a_signed_url(): void
+    public function test_private_download_rejects_tampering_anonymous_access_and_another_tenant(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        [$intruder] = $this->householdWithOwner('Intruder');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-download-access');
+        $this->process($document, new DeterministicFixtureExtractor);
+        $response = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertOk();
+        $url = $response->json('data.url');
+        self::assertIsString($url);
+
+        $this->actingAs($owner)->get($url.'&tampered=1')->assertForbidden();
+        $this->actingAs($intruder)->get($url)->assertForbidden();
+        Auth::guard('web')->logout();
+        Auth::forgetGuards();
+        $this->get($url)->assertUnauthorized();
+
+        $this->actingAs($owner);
+        $this->travel(6)->minutes();
+        $this->get($url)->assertForbidden();
+        $this->travelBack();
+    }
+
+    public function test_quarantine_or_original_deletion_revokes_an_already_minted_download_url(): void
     {
         [$owner, $household] = $this->householdWithOwner('Alex');
         $document = $this->uploadImage($owner, $household, 'upload-proof-0011');
+        $this->process($document, new DeterministicFixtureExtractor);
+        $response = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertOk();
+        $url = $response->json('data.url');
+        self::assertIsString($url);
+
         $document->update(['state' => DocumentState::Quarantined]);
 
+        $this->actingAs($owner)->get($url)->assertNotFound();
         $this->actingAs($owner)
             ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
             ->assertNotFound();
 
         $document->update(['state' => DocumentState::Failed, 'retain_original' => false]);
+        $this->actingAs($owner)->get($url)->assertNotFound();
         $this->actingAs($owner)
             ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
             ->assertNotFound();

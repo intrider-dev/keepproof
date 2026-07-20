@@ -1,6 +1,6 @@
 # ADR 0005: Use Private S3-Compatible Object Storage
 
-- Status: Accepted
+- Status: Accepted; receipt delivery amended by [ADR 0008](0008-same-origin-receipt-download-gateway.md)
 - Date: 2026-07-20
 
 ## Context
@@ -21,15 +21,15 @@ Keys and object metadata contain no email, merchant, original filename, or user-
 
 Uploads pass through the backend so it can enforce a 10 MiB limit, content-derived MIME, image dimensions/pixel count, image re-encoding and metadata removal, and SHA-256 calculation. Only JPEG, PNG, and PDF are accepted. The worker rechecks the checksum and content signature, rejects known active/embedded PDF markers, and limits local PDF OCR to the first three pages. The current upload path does not reject a PDF solely because it has more than three pages. Objects are private and quarantined documents are never downloadable.
 
-An authorized POST download action creates a short-lived signed URL, five minutes by default and bounded to 1–15 minutes. Signed URLs are not persisted or logged. The JSON response uses `private, no-store`; object parameters request attachment disposition and the verified MIME type. Nginx applies MIME nosniff and a restrictive referrer policy to the application.
+Receipt delivery follows [ADR 0008](0008-same-origin-receipt-download-gateway.md): an authorized POST creates a short-lived relative application URL, five minutes by default and bounded to 1–15 minutes. The authenticated GET re-authorizes the document and streams it from the private S3 boundary with a trusted filename, verified MIME type, `nosniff`, and `private, no-store` caching.
 
 Database and object storage cannot share a transaction. Uploads use compensating deletion when database persistence fails. Claim/account exports read authorized objects into request-scoped temporary ZIP files and delete each temporary file after sending. Account deletion synchronously removes owned receipt objects before deleting sessions and relational identity; if storage deletion reports failure, relational deletion stops. The current code has no persisted asynchronous export object or scheduled orphan-cleanup subsystem.
 
 ## Consequences
 
 - Local behavior exercises the same S3 API boundary used in deployment.
-- Private-by-default storage and expiring URLs reduce accidental disclosure.
-- Signed URL routing must be configured correctly through the local reverse proxy.
+- Private-by-default storage and expiring application URLs reduce accidental disclosure.
+- The browser never needs a routable S3 endpoint, and local object storage does not publish a host port.
 - Cross-system operations require explicit compensation, reconciliation, and failure tests.
 - Storage migration is a key copy plus checksum verification and database key cutover, not an application rewrite.
 

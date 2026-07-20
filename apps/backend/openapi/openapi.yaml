@@ -594,14 +594,14 @@ paths:
     post:
       tags: [Receipts]
       operationId: createReceiptDownloadUrl
-      summary: Create a short-lived signed URL for a private receipt.
+      summary: Create a short-lived same-origin download URL for a private receipt.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: "#/components/parameters/HouseholdId"
         - $ref: "#/components/parameters/DocumentId"
       responses:
         "200":
-          description: Short-lived signed private-object URL.
+          description: Relative signed application URL. The exact URL requires the current authenticated session and streams the private object without exposing the storage endpoint.
           content:
             application/json:
               schema:
@@ -612,9 +612,47 @@ paths:
                     type: object
                     required: [url, expires_at]
                     properties:
-                      url: { type: string, format: uri }
+                      url:
+                        type: string
+                        description: Relative same-origin URL including the bounded expiry and signature.
                       expires_at: { type: string, format: date-time }
         "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/receipt-downloads/{documentId}:
+    get:
+      tags: [Receipts]
+      operationId: downloadReceiptOriginal
+      summary: Consume a server-minted receipt download URL.
+      description: Use the exact relative URL returned by createReceiptDownloadUrl. The signature covers the path and query; the active session is re-authorized when the file is streamed.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Ulid" }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: signature
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Original receipt with a trusted attachment filename.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            image/jpeg:
+              schema: { type: string, contentEncoding: binary }
+            image/png:
+              schema: { type: string, contentEncoding: binary }
+            application/pdf:
+              schema: { type: string, contentEncoding: binary }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+        "403": { $ref: "#/components/responses/AuthorizationProblem" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/households/{household}/documents/{document}/retry:
     post:
       tags: [Receipts]

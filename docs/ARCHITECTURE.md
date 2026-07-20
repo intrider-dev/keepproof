@@ -166,8 +166,9 @@ Receipt text is data. It is never evaluated as a prompt instruction, command, to
 - The database stores structured purchase data, encrypted raw OCR text, extraction candidates, checksums, object references, transitions, reminders, and audit events.
 - The private S3-compatible bucket stores sanitized originals at application-generated keys. User-supplied paths are never used.
 - Images are decoded and re-encoded, removing EXIF and ancillary metadata. JPEG/PNG dimensions are limited to 10,000 per side and 25 megapixels; all supported uploads are limited to 10 MiB.
-- An authenticated POST authorizes a document and creates a 1–15 minute temporary object URL. Signed URLs are not persisted or logged.
-- Quarantined or deleted originals cannot receive a URL. Claim/account exports stream available private objects into a temporary ZIP.
+- An authenticated POST authorizes a document and creates a relative 1–15 minute signed application URL. The same-origin GET requires the active web session, validates the relative signature, re-runs the document Policy and current-state checks, and streams the bounded object from S3 with a trusted attachment name and `no-store` headers.
+- Object storage is reachable only on the Compose network; its internal hostname and credentials never become browser configuration. Signed URLs are neither persisted nor included in application or Nginx access logs.
+- Quarantined or deleted originals cannot receive a URL, and state is checked again when an already minted URL is consumed. Claim/account exports stream available private objects into a temporary ZIP.
 - Local SeaweedFS is replaceable with another private S3-compatible service through Flysystem configuration; migration requires object copy plus checksum verification before switching reads.
 
 ## Queue and scheduler semantics
@@ -193,7 +194,7 @@ One scheduler process is assumed. A multi-instance deployment must use a single 
 | Redis unavailable for cache/throttle or queue reads        | Affected requests/jobs fail safely; database sessions remain separate   | Restore Redis, then reconciliation/worker resumes                     |
 | Object storage unavailable before upload                   | No document row is created                                              | User retries with the same or a new idempotency key                   |
 | Object storage unavailable during processing               | Transient failure with bounded retry                                    | Automatic retry, then visible `failed` state and manual retry         |
-| Invalid checksum/type/active PDF                           | Permanent failure and quarantine                                        | Manual entry; quarantined object never receives a signed URL          |
+| Invalid checksum/type/active PDF                           | Permanent failure and quarantine                                        | Manual entry; quarantined object cannot mint or consume a signed URL  |
 | OCR transient failure                                      | `failed`, retry/backoff, at most three attempts                         | Retry endpoint or reconciliation after dependency recovery            |
 | Optional AI disabled, unconsented, invalid, or over budget | Provider is not called or output is rejected; local/manual path remains | Correct configuration/consent, or continue locally                    |
 | SMTP outcome ambiguous                                     | Reminder becomes `delivery_unknown`                                     | Operator inspects provider evidence; no blind duplicate send          |

@@ -45,7 +45,7 @@ KeepProof records merchant terms supplied by the user or document. It does not p
 - **Database-authoritative async work.** Redis carries wake-ups; receipt state and a renewable dispatch lease remain in PostgreSQL so a minute scheduler can recover stranded work.
 - **Explicit failure semantics.** Jobs are overlap-protected and bounded. Permanent failures quarantine; transient failures retry; an ambiguous SMTP interruption becomes `delivery_unknown` instead of risking a duplicate email.
 - **Human confirmation as a trust boundary.** OCR and optional AI produce provisional candidates only. Confirming the review is the transaction boundary for purchase activation, deadline calculation, reminders, field provenance, and the state transition to `ready`.
-- **Private file handling.** Content-derived MIME checks, image re-encoding, pixel and size limits, opaque object keys, checksum validation, active-PDF markers, short-lived signed URLs, and storage cleanup are covered by feature tests.
+- **Private file handling.** Content-derived MIME checks, image re-encoding, pixel and size limits, opaque object keys, checksum validation, active-PDF markers, authenticated same-origin signed downloads, and storage cleanup are covered by feature and connected browser tests.
 - **Contract-first SPA.** The `/api/v1` OpenAPI 3.1 document is linted and generates the TypeScript client types used by the Vue application. Errors use Problem Details with a correlation ID.
 - **Operational proof.** Clean migrations, readiness checks, synthetic seeding, Docker health checks, queue reconciliation, backups, CI, SBOM artifacts, and a reproducible local load probe are included.
 
