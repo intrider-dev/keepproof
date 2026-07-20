@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import authProofJourneyUrl from '../assets/auth-proof-journey.webp'
 import BrandMark from '../components/BrandMark.vue'
 import AppIcon from '../components/AppIcon.vue'
 import type { UserResponse } from '../api/generated'
@@ -162,24 +161,23 @@ const submit = async (): Promise<void> => {
       </p>
     </section>
     <aside class="auth-story auth-story--steps" aria-label="What happens next">
-      <p class="eyebrow">What happens next</p>
-      <div class="auth-story__visual" aria-hidden="true">
-        <img :src="authProofJourneyUrl" alt="" width="1200" height="800" decoding="async" />
+      <div class="auth-story__steps-card">
+        <p class="eyebrow">What happens next</p>
+        <ol>
+          <li>
+            <span>1</span>
+            <p><strong>Verify your email</strong>Your private session is protected.</p>
+          </li>
+          <li>
+            <span>2</span>
+            <p><strong>Add a receipt</strong>Use a file or enter details manually.</p>
+          </li>
+          <li>
+            <span>3</span>
+            <p><strong>Confirm the dates</strong>Nothing activates before your review.</p>
+          </li>
+        </ol>
       </div>
-      <ol>
-        <li>
-          <span>1</span>
-          <p><strong>Verify your email</strong>Your private session is protected.</p>
-        </li>
-        <li>
-          <span>2</span>
-          <p><strong>Add a receipt</strong>Use a file or enter details manually.</p>
-        </li>
-        <li>
-          <span>3</span>
-          <p><strong>Confirm the dates</strong>Nothing activates before your review.</p>
-        </li>
-      </ol>
     </aside>
   </main>
 </template>
