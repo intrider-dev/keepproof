@@ -17,30 +17,54 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
         ReceiptExtractionContext $context,
     ): ReceiptExtraction {
         $fields = [];
-        $this->addTextField($fields, $document->text, 'merchant', 'MERCHANT', '0.9800');
-        $this->addTextField($fields, $document->text, 'purchase_date', 'PURCHASE DATE', '0.9700');
-        $this->addTextField($fields, $document->text, 'receipt_number', 'RECEIPT', '0.9300');
-        $this->addTextField($fields, $document->text, 'currency', 'CURRENCY', '0.9900');
+        if (! $this->addTextField($fields, $document->text, 'merchant', ['MERCHANT'], '0.9800')) {
+            $this->addMerchantHeading($fields, $document->text);
+        }
+        $this->addTextField($fields, $document->text, 'purchase_date', ['PURCHASE DATE'], '0.9700');
+        $this->addTextField($fields, $document->text, 'receipt_number', ['RECEIPT'], '0.9300');
+        if (! $this->addTextField($fields, $document->text, 'currency', ['CURRENCY'], '0.9900')) {
+            $this->addCurrencyFromTotal($fields, $document->text);
+        }
         $this->addMoneyField($fields, $document->text);
-        $this->addTextField($fields, $document->text, 'item_name', 'ITEM', '0.9100');
-        $this->addPeriodFields($fields, $document->text, 'RETURN DAYS', 'return', 'days', '0.8600');
-        $this->addPeriodFields($fields, $document->text, 'WARRANTY MONTHS', 'warranty', 'months', '0.8400');
+        if (! $this->addTextField($fields, $document->text, 'item_name', ['ITEM'], '0.9100')) {
+            $this->addItemBeforeQuantity($fields, $document->text);
+        }
+        $this->addPeriodFields(
+            $fields,
+            $document->text,
+            ['RETURN DAYS', 'RETURN WINDOW'],
+            'return',
+            'days',
+            '0.8600',
+        );
+        $this->addPeriodFields(
+            $fields,
+            $document->text,
+            ['WARRANTY MONTHS', 'LIMITED WARRANTY'],
+            'warranty',
+            'months',
+            '0.8400',
+        );
 
         return new ReceiptExtraction($fields, 'deterministic-patterns', 'receipt-patterns-v1');
     }
 
-    /** @param list<ExtractedField> $fields */
+    /**
+     * @param  list<ExtractedField>  $fields
+     * @param  list<string>  $labels
+     */
     private function addTextField(
         array &$fields,
         string $text,
         string $key,
-        string $label,
+        array $labels,
         string $confidence,
-    ): void {
-        $value = $this->capture($text, $label);
-        if ($value === null) {
-            return;
+    ): bool {
+        $captured = $this->captureFirst($text, $labels);
+        if ($captured === null) {
+            return false;
         }
+        [$value, $label] = $captured;
 
         $normalized = match ($key) {
             'currency' => strtoupper($value),
@@ -55,9 +79,13 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
         }
 
         $fields[] = new ExtractedField($key, $value, $normalized, $confidence, 'ocr:'.$label, $errors);
+
+        return true;
     }
 
-    /** @param list<ExtractedField> $fields */
+    /**
+     * @param  list<ExtractedField>  $fields
+     */
     private function addMoneyField(array &$fields, string $text): void
     {
         $value = $this->capture($text, 'TOTAL');
@@ -68,7 +96,11 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
         $match = [];
         $normalized = null;
         $errors = [];
-        if (preg_match('/^(?<major>\d{1,13})(?:[.,](?<minor>\d{1,2}))?$/D', trim($value), $match) === 1) {
+        if (preg_match(
+            '/^(?:[A-Z]{3}\s+)?(?<major>\d{1,13})(?:[.,](?<minor>\d{1,2}))?$/D',
+            trim($value),
+            $match,
+        ) === 1) {
             $minor = str_pad((string) ($match['minor'] ?? ''), 2, '0');
             $normalized = (string) (((int) $match['major'] * 100) + (int) $minor);
         } else {
@@ -78,21 +110,28 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
         $fields[] = new ExtractedField('total_minor', $value, $normalized, '0.9500', 'ocr:TOTAL', $errors);
     }
 
-    /** @param list<ExtractedField> $fields */
+    /**
+     * @param  list<ExtractedField>  $fields
+     * @param  list<string>  $labels
+     */
     private function addPeriodFields(
         array &$fields,
         string $text,
-        string $label,
+        array $labels,
         string $prefix,
         string $unit,
         string $confidence,
     ): void {
-        $value = $this->capture($text, $label);
-        if ($value === null) {
+        $captured = $this->captureFirst($text, $labels);
+        if ($captured === null) {
             return;
         }
+        [$value, $label] = $captured;
 
-        $normalized = ctype_digit($value) ? $value : null;
+        $matches = [];
+        $normalized = preg_match('/^(?<quantity>\d{1,4})(?:\s+[A-Z]+)?$/iD', $value, $matches) === 1
+            ? (string) $matches['quantity']
+            : null;
         $errors = $normalized === null ? ['The extracted period is not a whole number.'] : [];
         $fields[] = new ExtractedField(
             $prefix.'_period_quantity',
@@ -114,12 +153,75 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
     private function capture(string $text, string $label): ?string
     {
         $matches = [];
-        $pattern = '/^'.preg_quote($label, '/').'\s*:\s*(?<value>[^\r\n]{1,240})$/mi';
+        $pattern = '/^'.preg_quote($label, '/').'\s*:?\s+(?<value>[^\r\n]{1,240})$/mi';
 
         if (preg_match($pattern, $text, $matches) !== 1) {
             return null;
         }
 
         return trim((string) $matches['value']);
+    }
+
+    /** @param list<string> $labels
+     * @return array{string, string}|null
+     */
+    private function captureFirst(string $text, array $labels): ?array
+    {
+        foreach ($labels as $label) {
+            $value = $this->capture($text, $label);
+            if ($value !== null) {
+                return [$value, $label];
+            }
+        }
+
+        return null;
+    }
+
+    /** @param list<ExtractedField> $fields */
+    private function addMerchantHeading(array &$fields, string $text): void
+    {
+        $lines = preg_split('/\R/u', trim($text));
+        if (! is_array($lines)) {
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $value = trim($line);
+            if ($value === '' || mb_strlen($value) > 120 || preg_match('/^[A-Z][A-Z0-9 &\'\-.]{2,}$/D', $value) !== 1) {
+                continue;
+            }
+
+            $fields[] = new ExtractedField('merchant', $value, $value, '0.8200', 'ocr:document-heading');
+
+            return;
+        }
+    }
+
+    /** @param list<ExtractedField> $fields */
+    private function addCurrencyFromTotal(array &$fields, string $text): void
+    {
+        $matches = [];
+        if (preg_match('/^TOTAL\s*:?\s+(?<currency>[A-Z]{3})\s+\d/mi', $text, $matches) !== 1) {
+            return;
+        }
+
+        $currency = strtoupper((string) $matches['currency']);
+        $fields[] = new ExtractedField('currency', $currency, $currency, '0.9300', 'ocr:TOTAL');
+    }
+
+    /** @param list<ExtractedField> $fields */
+    private function addItemBeforeQuantity(array &$fields, string $text): void
+    {
+        $matches = [];
+        if (preg_match(
+            '/^(?<item>[A-Z][A-Z0-9 &\'\-.]{2,})\R\s*QTY\b/mi',
+            str_replace("\r\n", "\n", $text),
+            $matches,
+        ) !== 1) {
+            return;
+        }
+
+        $item = trim((string) $matches['item']);
+        $fields[] = new ExtractedField('item_name', $item, $item, '0.8000', 'ocr:line-before-quantity');
     }
 }
