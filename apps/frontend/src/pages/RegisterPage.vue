@@ -161,21 +161,23 @@ const submit = async (): Promise<void> => {
       </p>
     </section>
     <aside class="auth-story auth-story--steps" aria-label="What happens next">
-      <p class="eyebrow">What happens next</p>
-      <ol>
-        <li>
-          <span>1</span>
-          <p><strong>Verify your email</strong>Your private session is protected.</p>
-        </li>
-        <li>
-          <span>2</span>
-          <p><strong>Add a receipt</strong>Use a file or enter details manually.</p>
-        </li>
-        <li>
-          <span>3</span>
-          <p><strong>Confirm the dates</strong>Nothing activates before your review.</p>
-        </li>
-      </ol>
+      <div class="auth-story__steps-card">
+        <p class="eyebrow">What happens next</p>
+        <ol>
+          <li>
+            <span>1</span>
+            <p><strong>Verify your email</strong>Your private session is protected.</p>
+          </li>
+          <li>
+            <span>2</span>
+            <p><strong>Add a receipt</strong>Use a file or enter details manually.</p>
+          </li>
+          <li>
+            <span>3</span>
+            <p><strong>Confirm the dates</strong>Nothing activates before your review.</p>
+          </li>
+        </ol>
+      </div>
     </aside>
   </main>
 </template>

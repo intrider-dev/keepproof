@@ -1311,16 +1311,20 @@ ol {
   background-image: url('./assets/auth-login-background.webp');
 }
 
-.auth-story__card {
+.auth-story__card,
+.auth-story__steps-card {
   position: relative;
   z-index: 1;
-  width: min(480px, calc(100% - 80px));
   padding: 38px;
   border: 1px solid rgb(255 255 255 / 65%);
   border-radius: 19px;
   background: rgb(255 253 248 / 76%);
   box-shadow: 0 22px 64px rgb(31 52 38 / 17%);
   backdrop-filter: blur(18px);
+}
+
+.auth-story__card {
+  width: min(480px, calc(100% - 80px));
 }
 
 .auth-story blockquote {
@@ -1359,14 +1363,11 @@ ol {
   background-image: url('./assets/auth-register-background.webp');
 }
 
-.auth-story--steps > .eyebrow,
-.auth-story--steps ol {
-  position: relative;
-  z-index: 1;
+.auth-story__steps-card {
   width: min(100%, 520px);
 }
 
-.auth-story--steps ol {
+.auth-story__steps-card ol {
   display: grid;
   gap: 36px;
   max-width: 460px;
