@@ -33,6 +33,37 @@ test('dashboard has no automatically detectable accessibility violations', async
   expect(results.violations).toEqual([])
 })
 
+test('primary SPA navigation renders every destination and the brand returns to dashboard', async ({
+  page,
+}) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await page.goto('/demo')
+  await expect(page.getByRole('heading', { name: /Good morning, Alex/ })).toBeVisible()
+
+  const destinations = [
+    { link: 'Purchases', heading: 'Every purchase, easy to find' },
+    { link: 'Deadlines', heading: 'Your deadline timeline' },
+    { link: 'Reminders', heading: 'Your reminders, in one place' },
+  ]
+
+  for (const destination of destinations) {
+    await page
+      .getByRole('link', { name: new RegExp(`^${destination.link}`) })
+      .filter({ visible: true })
+      .click()
+    await expect(page.getByRole('heading', { name: destination.heading })).toBeVisible()
+    await expect(page.locator('#main-content')).not.toBeEmpty()
+  }
+
+  await page.getByRole('link', { name: 'KeepProof' }).filter({ visible: true }).click()
+
+  await expect(page.getByRole('heading', { name: /Good morning, Alex/ })).toBeVisible()
+  await expect(page.locator('#main-content')).not.toBeEmpty()
+  expect(pageErrors).toEqual([])
+})
+
 test('privacy export and destructive confirmation are explicit', async ({ page }) => {
   await page.goto('/demo')
   await page.getByRole('link', { name: 'Privacy & data' }).click()

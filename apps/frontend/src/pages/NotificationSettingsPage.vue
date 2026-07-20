@@ -7,7 +7,14 @@ import { appStore } from '../stores/app'
 import { ApiProblem } from '../lib/api'
 import type { NotificationPreferences } from '../types'
 
-const form = reactive<NotificationPreferences>(structuredClone(appStore.state.preferences))
+const form = reactive<NotificationPreferences>({
+  inApp: appStore.state.preferences.inApp,
+  email: appStore.state.preferences.email,
+  reminderDays: [...appStore.state.preferences.reminderDays],
+  quietHours: appStore.state.preferences.quietHours,
+  quietFrom: appStore.state.preferences.quietFrom,
+  quietUntil: appStore.state.preferences.quietUntil,
+})
 const busy = ref(false)
 const requestError = ref('')
 const markingId = ref('')
