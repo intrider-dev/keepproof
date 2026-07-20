@@ -32,6 +32,26 @@ $northstar = [
     'NOT VALID FOR A REAL PURCHASE',
 ];
 
+$northstarHome = [
+    'NORTHSTAR HOME',
+    '40 SYNTHETIC MARKET ROAD',
+    'EXAMPLE CITY',
+    '',
+    'RECEIPT       NS-1042',
+    'PURCHASE DATE 2026-07-08',
+    '',
+    'LINEN FLOOR LAMP',
+    'QTY 1              USD 139.50',
+    '',
+    'TOTAL              USD 139.50',
+    '',
+    'RETURN WINDOW: 30 DAYS',
+    'LIMITED WARRANTY: 12 MONTHS',
+    '',
+    'SYNTHETIC KEEPProof DEMO RECEIPT',
+    'NOT VALID FOR A REAL PURCHASE',
+];
+
 $promptInjection = [
     'EXAMPLE HOME STORE',
     'SYNTHETIC SECURITY FIXTURE',
@@ -54,6 +74,7 @@ $promptInjection = [
 writeBitmap($output.'/northstar-receipt.png', $northstar, 'png');
 writeBitmap($output.'/northstar-receipt.jpg', $northstar, 'jpeg');
 writePdf($output.'/northstar-receipt.pdf', $northstar);
+writeBitmap($output.'/northstar-home-receipt.png', $northstarHome, 'png');
 writeBitmap($output.'/prompt-injection-receipt.png', $promptInjection, 'png', true);
 
 foreach (glob($output.'/*') ?: [] as $fixture) {
