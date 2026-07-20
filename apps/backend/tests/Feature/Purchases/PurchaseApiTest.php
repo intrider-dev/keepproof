@@ -9,7 +9,9 @@ use App\Modules\Households\Enums\HouseholdRole;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Models\HouseholdMember;
 use App\Modules\Purchases\Models\Purchase;
+use App\Modules\Purchases\Models\PurchaseDeadline;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 final class PurchaseApiTest extends TestCase
@@ -66,6 +68,94 @@ final class PurchaseApiTest extends TestCase
                 'source' => 'manual_override',
             ])
             ->assertJsonPath('data.manual_return_reason', 'Merchant confirmed a written extension.');
+    }
+
+    public function test_update_replaces_items_recalculates_deadlines_and_records_the_change(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $created = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/purchases', $this->payload())
+            ->assertCreated();
+        $purchaseId = $created->json('data.id');
+        self::assertIsString($purchaseId);
+        $payload = $this->payload();
+        $payload['merchant'] = 'North & Pine Service Desk';
+        $payload['purchase_date'] = '2024-02-29';
+        $payload['total_minor'] = 10950;
+        $payload['return_period_quantity'] = 14;
+        $payload['items'] = [
+            ['name' => 'Replacement kettle', 'quantity' => 1, 'unit_price_minor' => 8950],
+            ['name' => 'Extended cable', 'quantity' => 1, 'unit_price_minor' => 2000],
+        ];
+
+        $this->actingAs($owner)
+            ->putJson('/api/v1/households/'.$household->id.'/purchases/'.$purchaseId, $payload)
+            ->assertOk()
+            ->assertJsonPath('data.merchant', 'North & Pine Service Desk')
+            ->assertJsonPath('data.total_minor', 10950)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonFragment(['kind' => 'return', 'due_on' => '2024-03-14']);
+
+        $this->assertDatabaseMissing('purchase_items', [
+            'purchase_id' => $purchaseId,
+            'name' => 'Pour-over electric kettle',
+        ]);
+        $this->assertDatabaseHas('purchase_items', [
+            'purchase_id' => $purchaseId,
+            'name' => 'Extended cable',
+            'unit_price_minor' => 2000,
+        ]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'purchase.updated',
+            'subject_id' => $purchaseId,
+        ]);
+    }
+
+    public function test_update_rolls_back_purchase_items_and_deadlines_when_a_late_write_fails(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $created = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/purchases', $this->payload())
+            ->assertCreated();
+        $purchaseId = $created->json('data.id');
+        self::assertIsString($purchaseId);
+        $original = Purchase::query()->with(['items', 'deadlines'])->findOrFail($purchaseId);
+        $originalDeadlines = $original->deadlines->mapWithKeys(
+            static fn (PurchaseDeadline $deadline): array => [$deadline->kind->value => $deadline->due_at->toAtomString()],
+        )->all();
+
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER reject_purchase_update_audit
+            BEFORE INSERT ON audit_logs
+            WHEN NEW.action = 'purchase.updated'
+            BEGIN
+                SELECT RAISE(FAIL, 'simulated late purchase update failure');
+            END;
+            SQL);
+        $payload = $this->payload();
+        $payload['merchant'] = 'Must Roll Back';
+        $payload['items'] = [[
+            'name' => 'Uncommitted replacement',
+            'quantity' => 1,
+            'unit_price_minor' => 8950,
+        ]];
+
+        $this->actingAs($owner)
+            ->putJson('/api/v1/households/'.$household->id.'/purchases/'.$purchaseId, $payload)
+            ->assertInternalServerError()
+            ->assertJsonPath('detail', 'An unexpected error occurred.')
+            ->assertJsonMissing(['detail' => 'simulated late purchase update failure']);
+
+        $rolledBack = Purchase::query()->with(['items', 'deadlines'])->findOrFail($purchaseId);
+        self::assertSame('North & Pine', $rolledBack->merchant);
+        self::assertSame(['Pour-over electric kettle'], $rolledBack->items->pluck('name')->all());
+        self::assertSame(
+            $originalDeadlines,
+            $rolledBack->deadlines->mapWithKeys(
+                static fn (PurchaseDeadline $deadline): array => [$deadline->kind->value => $deadline->due_at->toAtomString()],
+            )->all(),
+        );
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'purchase.updated']);
     }
 
     public function test_nested_binding_hides_foreign_purchase_and_household_identifiers(): void

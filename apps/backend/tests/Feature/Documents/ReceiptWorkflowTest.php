@@ -15,6 +15,7 @@ use App\Modules\Documents\Exceptions\InvalidDocumentTransition;
 use App\Modules\Documents\Exceptions\TransientDocumentFailure;
 use App\Modules\Documents\Extraction\DeterministicFixtureExtractor;
 use App\Modules\Documents\Jobs\ProcessReceipt;
+use App\Modules\Documents\Models\ExtractionField;
 use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Households\Enums\HouseholdRole;
 use App\Modules\Households\Models\Household;
@@ -201,6 +202,52 @@ final class ReceiptWorkflowTest extends TestCase
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'receipt.confirmed')->count());
     }
 
+    public function test_confirmation_rolls_back_every_authoritative_change_when_a_late_write_fails(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-confirmation-rollback');
+        $this->process($document, new DeterministicFixtureExtractor);
+
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER reject_confirmation_audit
+            BEFORE INSERT ON audit_logs
+            WHEN NEW.action = 'receipt.confirmed'
+            BEGIN
+                SELECT RAISE(FAIL, 'simulated late confirmation failure');
+            END;
+            SQL);
+
+        $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'confirm-rollback-0001')
+            ->putJson(
+                '/api/v1/households/'.$household->id.'/documents/'.$document->id.'/confirmation',
+                $this->confirmationPayload(),
+            )
+            ->assertInternalServerError()
+            ->assertJsonPath('detail', 'An unexpected error occurred.')
+            ->assertJsonMissing(['detail' => 'simulated late confirmation failure']);
+
+        $document->refresh()->load(['fields', 'purchase']);
+        self::assertSame(DocumentState::NeedsReview, $document->state);
+        self::assertSame('needs_review', $document->purchase->state->value);
+        self::assertNull($document->purchase->activated_at);
+        self::assertTrue($document->fields->every(
+            static fn (ExtractionField $field): bool => $field->confirmed_value === null,
+        ));
+        $this->assertDatabaseMissing('purchase_deadlines', ['purchase_id' => $document->purchase_id]);
+        $this->assertDatabaseCount('reminders', 0);
+        $this->assertDatabaseMissing('idempotency_records', [
+            'operation' => 'receipt.confirm',
+            'resource_id' => $document->id,
+        ]);
+        $this->assertDatabaseMissing('document_state_transitions', [
+            'receipt_document_id' => $document->id,
+            'to_state' => 'ready',
+        ]);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'purchase.updated']);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'receipt.confirmed']);
+    }
+
     public function test_transient_failure_moves_to_failed_and_a_later_run_recovers_idempotently(): void
     {
         [$owner, $household] = $this->householdWithOwner('Alex');
@@ -228,6 +275,48 @@ final class ReceiptWorkflowTest extends TestCase
             ->where('receipt_document_id', $document->id)
             ->where('field_key', 'merchant')
             ->count());
+    }
+
+    public function test_failed_receipt_can_be_retried_through_the_api_but_quarantine_is_terminal(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-api-retry');
+        $failing = new class implements DocumentTextExtractor
+        {
+            public function extract(string $binary, string $mimeType): ExtractedDocumentText
+            {
+                throw new TransientDocumentFailure('ocr_temporarily_unavailable');
+            }
+        };
+
+        try {
+            $this->process($document, $failing);
+            self::fail('The synthetic transient failure must reach the queue retry boundary.');
+        } catch (TransientDocumentFailure) {
+            self::assertSame(DocumentState::Failed, $document->refresh()->state);
+        }
+
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/retry')
+            ->assertAccepted()
+            ->assertJsonPath('data.state', 'validation_pending')
+            ->assertJsonPath('data.user_error', null);
+        Queue::assertPushed(ProcessReceipt::class, 2);
+        $this->assertDatabaseHas('document_state_transitions', [
+            'receipt_document_id' => $document->id,
+            'from_state' => 'failed',
+            'to_state' => 'validation_pending',
+            'reason' => 'manual_retry_requested',
+        ]);
+
+        $document->update(['state' => DocumentState::Quarantined]);
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/retry')
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.document.0',
+                'Only a failed receipt can be retried. Quarantined files cannot be processed.',
+            );
     }
 
     public function test_active_pdf_content_is_quarantined_without_retry(): void
@@ -332,6 +421,41 @@ final class ReceiptWorkflowTest extends TestCase
             ->assertNotFound();
 
         $document->update(['state' => DocumentState::Failed, 'retain_original' => false]);
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertNotFound();
+    }
+
+    public function test_user_can_delete_a_processed_original_once_without_deleting_extracted_data(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-delete-original');
+        $this->process($document, new DeterministicFixtureExtractor);
+        Storage::disk('receipts')->assertExists($document->storage_key);
+
+        $url = '/api/v1/households/'.$household->id.'/documents/'.$document->id.'/original';
+        $this->actingAs($owner)->deleteJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.retain_original', false)
+            ->assertJsonFragment([
+                'key' => 'merchant',
+                'normalized_value' => 'Northstar Home',
+            ]);
+
+        Storage::disk('receipts')->assertMissing($document->storage_key);
+        $this->assertDatabaseHas('receipt_documents', [
+            'id' => $document->id,
+            'retain_original' => false,
+        ]);
+        $this->assertDatabaseHas('extraction_fields', ['receipt_document_id' => $document->id]);
+        $this->actingAs($owner)->deleteJson($url)
+            ->assertOk()
+            ->assertJsonPath('data.retain_original', false);
+        self::assertSame(1, DB::table('audit_logs')
+            ->where('action', 'receipt.original_deleted')
+            ->where('subject_id', $document->id)
+            ->count());
+
         $this->actingAs($owner)
             ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
             ->assertNotFound();

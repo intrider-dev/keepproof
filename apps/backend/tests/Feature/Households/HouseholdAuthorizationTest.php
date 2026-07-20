@@ -34,6 +34,20 @@ final class HouseholdAuthorizationTest extends TestCase
         $this->assertSame($missing->json('title'), $foreign->json('title'));
     }
 
+    public function test_household_index_contains_only_current_memberships_with_the_effective_role(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        [, $foreignHousehold] = $this->householdWithOwner('Foreign');
+
+        $this->actingAs($owner)
+            ->getJson('/api/v1/households?per_page=100')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $household->id)
+            ->assertJsonPath('data.0.role', HouseholdRole::Owner->value)
+            ->assertJsonMissing(['id' => $foreignHousehold->id]);
+    }
+
     public function test_a_member_can_read_but_only_an_owner_can_change_a_household(): void
     {
         [$owner, $household] = $this->householdWithOwner('Owner');
@@ -51,6 +65,16 @@ final class HouseholdAuthorizationTest extends TestCase
 
         $this->actingAs($member)->patchJson('/api/v1/households/'.$household->id, ['name' => 'Forbidden'])
             ->assertForbidden();
+
+        Notification::fake();
+        $this->actingAs($member)->postJson('/api/v1/households/'.$household->id.'/invitations', [
+            'email' => 'new-member@example.com',
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('household_invitations', [
+            'household_id' => $household->id,
+            'email' => 'new-member@example.com',
+        ]);
+        Notification::assertNothingSent();
 
         $this->actingAs($owner)->patchJson('/api/v1/households/'.$household->id, ['name' => 'Shared records'])
             ->assertOk()
@@ -127,6 +151,36 @@ final class HouseholdAuthorizationTest extends TestCase
             ->deleteJson('/api/v1/households/'.$household->id.'/members/'.$owner->id)
             ->assertUnprocessable()
             ->assertJsonPath('errors.member.0', 'The household owner cannot be removed.');
+    }
+
+    public function test_owner_can_remove_a_member_without_deleting_the_members_account(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        $member = User::factory()->create(['email' => 'member-to-remove@example.com']);
+        HouseholdMember::query()->create([
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+            'role' => HouseholdRole::Member,
+            'joined_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->deleteJson('/api/v1/households/'.$household->id.'/members/'.$member->id)
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('household_members', [
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+        ]);
+        $this->assertDatabaseHas('users', ['id' => $member->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'household.member_removed',
+            'actor_user_id' => $owner->id,
+            'household_id' => $household->id,
+        ]);
+
+        $this->actingAs($member)->getJson('/api/v1/households/'.$household->id)
+            ->assertNotFound();
     }
 
     public function test_ownership_transfer_requires_recent_password_and_changes_authority_atomically(): void
