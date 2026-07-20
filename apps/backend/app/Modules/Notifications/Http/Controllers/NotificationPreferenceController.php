@@ -10,16 +10,19 @@ use App\Modules\Notifications\Http\Requests\UpdateNotificationPreferencesRequest
 use App\Modules\Notifications\Http\Resources\NotificationPreferenceResource;
 use App\Modules\Notifications\Models\NotificationPreference;
 use App\Modules\Shared\Audit\AuditRecorder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 final class NotificationPreferenceController extends Controller
 {
-    public function show(Request $request): NotificationPreferenceResource
+    public function show(Request $request): JsonResponse
     {
         $user = $this->authenticatedUser($request);
 
-        return new NotificationPreferenceResource($this->preferences($user->id)->load('user'));
+        return (new NotificationPreferenceResource($this->preferences($user->id)->load('user')))
+            ->response()
+            ->setStatusCode(200);
     }
 
     public function update(

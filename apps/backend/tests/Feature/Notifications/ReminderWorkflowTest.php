@@ -66,6 +66,12 @@ final class ReminderWorkflowTest extends TestCase
     public function test_preference_change_rebuilds_only_unsent_reminders_for_that_user(): void
     {
         [$owner, $household] = $this->householdWithOwner();
+        $this->actingAs($owner)->getJson('/api/v1/notification-preferences')
+            ->assertOk()
+            ->assertJsonPath('data.in_app_enabled', true)
+            ->assertJsonPath('data.email_enabled', true)
+            ->assertJsonPath('data.return_intervals', [7, 3, 1])
+            ->assertJsonPath('data.warranty_intervals', [30, 7]);
         $this->createPurchase($owner, $household);
 
         $this->actingAs($owner)->putJson('/api/v1/notification-preferences', [
@@ -122,14 +128,24 @@ final class ReminderWorkflowTest extends TestCase
 
         self::assertSame(ReminderStatus::Sent, $reminder->refresh()->status);
         $this->assertDatabaseCount('notifications', 1);
-        $this->actingAs($owner)->getJson('/api/v1/notifications')
+        $response = $this->actingAs($owner)->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonPath('data.0.data.purchase_id', $reminder->deadline->purchase_id)
             ->assertJsonMissingPath('data.0.notifiable_id')
             ->assertJsonMissingPath('data.0.notifiable_type');
+        $notificationId = $response->json('data.0.id');
+        self::assertIsString($notificationId);
+        $this->actingAs($owner)
+            ->putJson('/api/v1/notifications/'.$notificationId.'/read')
+            ->assertOk()
+            ->assertJsonPath('data.id', $notificationId)
+            ->assertJsonPath('data.read_at', fn (mixed $value): bool => is_string($value));
         $this->actingAs($other)->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonCount(0, 'data');
+        $this->actingAs($other)
+            ->putJson('/api/v1/notifications/'.$notificationId.'/read')
+            ->assertNotFound();
     }
 
     public function test_email_delivery_and_due_dispatch_are_bounded_and_deduplicated(): void
