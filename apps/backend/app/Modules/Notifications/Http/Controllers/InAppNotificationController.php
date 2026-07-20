@@ -5,18 +5,20 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Notifications\Http\Resources\InAppNotificationResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class InAppNotificationController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $user = $this->authenticatedUser($request);
         $perPage = min(max($request->integer('per_page', 20), 1), 100);
         $notifications = $user->notifications()->latest()->paginate($perPage);
 
-        return response()->json($notifications);
+        return InAppNotificationResource::collection($notifications);
     }
 
     public function read(Request $request, string $notification): JsonResponse

@@ -1,4 +1,11 @@
-import type { HouseholdMember, NotificationPreferences, Purchase, ReceiptDocument } from '../types'
+import type {
+  HouseholdMember,
+  InAppNotification,
+  NotificationPreferences,
+  Purchase,
+  ReceiptDocument,
+  ScheduledReminder,
+} from '../types'
 
 export const purchaseFixtures: Purchase[] = [
   {
@@ -251,3 +258,29 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   quietFrom: '22:00',
   quietUntil: '08:00',
 }
+
+export const notificationFixtures: InAppNotification[] = [
+  {
+    id: 'notification-kettle-return',
+    purchaseId: 'purchase-kettle',
+    deadlineId: 'deadline-kettle-return',
+    kind: 'return',
+    merchant: 'North & Pine',
+    dueOn: 'July 24, 2026',
+    message: 'Return deadline for North & Pine is approaching.',
+    readAt: null,
+    createdAt: '2026-07-20T09:00:00-04:00',
+  },
+]
+
+export const scheduledReminderFixtures: ScheduledReminder[] = [
+  {
+    id: 'reminder-kettle-three-days',
+    channel: 'email',
+    intervalDays: 3,
+    remindAt: '2026-07-21T13:00:00Z',
+    purchaseId: 'purchase-kettle',
+    merchant: 'North & Pine',
+    kind: 'return',
+  },
+]

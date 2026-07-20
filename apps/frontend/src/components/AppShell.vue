@@ -57,6 +57,13 @@ const signOut = async (): Promise<void> => {
           >
             {{ appStore.reviewDocuments.value.length }}
           </span>
+          <span
+            v-if="item.to === '/app/notifications' && appStore.unreadNotifications.value.length"
+            class="nav-count"
+            :aria-label="`${appStore.unreadNotifications.value.length} unread notifications`"
+          >
+            {{ appStore.unreadNotifications.value.length }}
+          </span>
         </RouterLink>
       </nav>
 

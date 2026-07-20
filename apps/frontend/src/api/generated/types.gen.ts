@@ -236,6 +236,28 @@ export type NotificationPreferencesResponse = {
     data: NotificationPreferences;
 };
 
+export type InAppNotificationData = {
+    purchase_id: Ulid;
+    deadline_id: Ulid;
+    kind: 'return' | 'warranty';
+    merchant: string;
+    due_on: string;
+    message: string;
+};
+
+export type InAppNotification = {
+    id: string;
+    data: InAppNotificationData;
+    read_at: string | null;
+    created_at: string | null;
+};
+
+export type InAppNotificationCollection = {
+    data: Array<InAppNotification>;
+    links: PaginationLinks;
+    meta: PaginationMeta;
+};
+
 export type HouseholdId = Ulid;
 
 export type PurchaseId = Ulid;
@@ -1297,8 +1319,10 @@ export type ListInAppNotificationsResponses = {
     /**
      * Paginated in-app notifications for the current user.
      */
-    200: unknown;
+    200: InAppNotificationCollection;
 };
+
+export type ListInAppNotificationsResponse = ListInAppNotificationsResponses[keyof ListInAppNotificationsResponses];
 
 export type MarkNotificationReadData = {
     body?: never;

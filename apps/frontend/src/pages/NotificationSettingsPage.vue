@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { appStore } from '../stores/app'
@@ -9,7 +10,25 @@ import type { NotificationPreferences } from '../types'
 const form = reactive<NotificationPreferences>(structuredClone(appStore.state.preferences))
 const busy = ref(false)
 const requestError = ref('')
+const markingId = ref('')
 const reminderOptions = [30, 14, 7, 3, 1]
+const nextReminder = computed(() => appStore.state.scheduledReminders[0])
+
+const markRead = async (notificationId: string): Promise<void> => {
+  if (markingId.value) return
+  markingId.value = notificationId
+  requestError.value = ''
+  try {
+    await appStore.markNotificationRead(notificationId)
+  } catch (caught) {
+    requestError.value =
+      caught instanceof ApiProblem
+        ? caught.problem.detail
+        : 'The notification could not be updated.'
+  } finally {
+    markingId.value = ''
+  }
+}
 
 const toggleReminder = (days: number): void => {
   form.reminderDays = form.reminderDays.includes(days)
@@ -36,9 +55,48 @@ const save = async (): Promise<void> => {
   <div class="page-stack settings-page">
     <PageHeader
       :eyebrow="`Your timezone · ${appStore.state.user.timezone}`"
-      title="Reminders that arrive at a useful time"
-      description="Choose how early KeepProof should remind you. Changing a deadline rebuilds its unsent reminder schedule."
+      title="Your reminders, in one place"
+      description="Review delivered notices and choose how early KeepProof should schedule the next ones."
     />
+
+    <section class="panel notification-inbox" aria-labelledby="notification-inbox-title">
+      <div class="panel__heading">
+        <div>
+          <p class="eyebrow">In-app inbox</p>
+          <h2 id="notification-inbox-title">Delivered notifications</h2>
+        </div>
+        <span>{{ appStore.unreadNotifications.value.length }} unread</span>
+      </div>
+      <ul v-if="appStore.state.notifications.length">
+        <li
+          v-for="notification in appStore.state.notifications"
+          :key="notification.id"
+          :class="{ 'notification-inbox__unread': !notification.readAt }"
+        >
+          <span class="feature-icon"><AppIcon name="bell" :size="18" /></span>
+          <div>
+            <strong>{{ notification.message }}</strong>
+            <p>{{ notification.merchant }} · Due {{ notification.dueOn }}</p>
+          </div>
+          <div class="notification-inbox__actions">
+            <RouterLink class="inline-link" :to="`/app/purchases/${notification.purchaseId}`">
+              View purchase
+            </RouterLink>
+            <button
+              v-if="!notification.readAt"
+              class="text-button"
+              type="button"
+              :disabled="Boolean(markingId)"
+              @click="markRead(notification.id)"
+            >
+              {{ markingId === notification.id ? 'Updating…' : 'Mark as read' }}
+            </button>
+            <small v-else>Read</small>
+          </div>
+        </li>
+      </ul>
+      <p v-else class="panel-note">No notifications have been delivered yet.</p>
+    </section>
 
     <form class="settings-grid" @submit.prevent="save">
       <div class="settings-main page-stack page-stack--compact">
@@ -53,7 +111,7 @@ const save = async (): Promise<void> => {
           <label class="setting-row">
             <span
               ><strong>In-app notifications</strong
-              ><small>See reminders on your dashboard and notification list.</small></span
+              ><small>See delivered notices here and in the dashboard activity.</small></span
             >
             <input v-model="form.inApp" class="switch" type="checkbox" />
           </label>
@@ -100,7 +158,7 @@ const save = async (): Promise<void> => {
             <span class="feature-icon"><AppIcon name="clock" /></span>
             <div>
               <h2>Quiet hours</h2>
-              <p>Hold non-urgent email until your morning, using your account timezone.</p>
+              <p>Move email delivery out of your selected quiet window.</p>
             </div>
           </div>
           <label class="setting-row">
@@ -138,13 +196,21 @@ const save = async (): Promise<void> => {
 
       <aside class="panel reminder-preview">
         <p class="eyebrow">Preview</p>
-        <h2>Your next reminder</h2>
+        <h2>Your next scheduled reminder</h2>
         <div class="notification-preview">
           <span class="feature-icon"><AppIcon name="receipt" /></span>
           <div>
-            <strong>Return window in 3 days</strong>
-            <p>North & Pine · Pour-over electric kettle</p>
-            <small>Tuesday at {{ form.quietHours ? form.quietUntil : '09:00' }}</small>
+            <strong v-if="nextReminder"
+              >{{ nextReminder.kind === 'return' ? 'Return' : 'Warranty' }} reminder ·
+              {{ nextReminder.intervalDays }} days before</strong
+            >
+            <strong v-else>No reminder currently scheduled</strong>
+            <p>
+              {{ nextReminder?.merchant ?? 'New schedules appear after a deadline is active.' }}
+            </p>
+            <small v-if="nextReminder">{{
+              nextReminder.channel === 'email' ? 'Email' : 'In-app'
+            }}</small>
           </div>
         </div>
         <dl>

@@ -18,8 +18,8 @@ final class UpdateNotificationPreferencesRequest extends FormRequest
             'return_intervals.*' => ['integer', 'min:1', 'max:365', 'distinct'],
             'warranty_intervals' => ['present', 'array', 'max:8'],
             'warranty_intervals.*' => ['integer', 'min:1', 'max:365', 'distinct'],
-            'quiet_hours_start' => ['nullable', 'date_format:H:i', 'required_with:quiet_hours_end'],
-            'quiet_hours_end' => ['nullable', 'date_format:H:i', 'required_with:quiet_hours_start'],
+            'quiet_hours_start' => ['nullable', 'date_format:H:i', 'required_with:quiet_hours_end', 'different:quiet_hours_end'],
+            'quiet_hours_end' => ['nullable', 'date_format:H:i', 'required_with:quiet_hours_start', 'different:quiet_hours_start'],
         ];
     }
 

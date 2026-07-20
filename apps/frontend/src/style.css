@@ -3308,6 +3308,73 @@ ol {
   font-size: 0.61rem;
 }
 
+.notification-inbox > .panel__heading > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.notification-inbox > ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification-inbox > ul > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: center;
+  padding-block: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.notification-inbox > ul > li:first-child {
+  border-top: 0;
+}
+
+.notification-inbox__unread {
+  position: relative;
+}
+
+.notification-inbox__unread::before {
+  position: absolute;
+  top: 20px;
+  left: -12px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  content: '';
+}
+
+.notification-inbox li strong,
+.notification-inbox li p {
+  display: block;
+}
+
+.notification-inbox li strong {
+  font-size: 0.8rem;
+}
+
+.notification-inbox li p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.notification-inbox__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.notification-inbox__actions small {
+  color: var(--muted-light);
+  font-size: 0.68rem;
+}
+
 .reminder-preview dl {
   display: grid;
   gap: 11px;
@@ -4406,6 +4473,16 @@ ol {
 
   .manual-form-actions .button {
     width: 100%;
+  }
+
+  .notification-inbox > ul > li {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .notification-inbox__actions {
+    grid-column: 2;
+    flex-wrap: wrap;
   }
 
   .processing-options .choice-card {

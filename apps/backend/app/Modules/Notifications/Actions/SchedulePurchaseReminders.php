@@ -51,7 +51,7 @@ final class SchedulePurchaseReminders
         $desiredKeys = [];
         foreach ($intervals as $interval) {
             foreach ($channels as $channel) {
-                $remindAt = $this->remindAt($deadline, $user, $interval);
+                $remindAt = $this->remindAt($deadline, $user, $interval, $channel, $preferences);
                 if ($remindAt->isPast()) {
                     continue;
                 }
@@ -96,12 +96,61 @@ final class SchedulePurchaseReminders
             ->update(['status' => ReminderStatus::Cancelled]);
     }
 
-    private function remindAt(PurchaseDeadline $deadline, User $user, int $interval): CarbonImmutable
-    {
-        return $deadline->due_at
+    private function remindAt(
+        PurchaseDeadline $deadline,
+        User $user,
+        int $interval,
+        ReminderChannel $channel,
+        NotificationPreference $preferences,
+    ): CarbonImmutable {
+        $local = $deadline->due_at
             ->setTimezone($user->timezone)
             ->subDays($interval)
-            ->setTime(9, 0)
-            ->utc();
+            ->setTime(9, 0);
+
+        if (
+            $channel === ReminderChannel::Email
+            && $preferences->quiet_hours_start !== null
+            && $preferences->quiet_hours_end !== null
+        ) {
+            $local = $this->moveOutsideQuietHours(
+                $local,
+                $preferences->quiet_hours_start,
+                $preferences->quiet_hours_end,
+            );
+        }
+
+        return $local->utc();
+    }
+
+    private function moveOutsideQuietHours(CarbonImmutable $local, string $start, string $end): CarbonImmutable
+    {
+        $startMinutes = $this->minutes($start);
+        $endMinutes = $this->minutes($end);
+        $currentMinutes = ($local->hour * 60) + $local->minute;
+
+        if ($startMinutes < $endMinutes) {
+            if ($currentMinutes >= $startMinutes && $currentMinutes < $endMinutes) {
+                return $local->setTime(intdiv($endMinutes, 60), $endMinutes % 60);
+            }
+
+            return $local;
+        }
+
+        if ($currentMinutes >= $startMinutes) {
+            return $local->addDay()->setTime(intdiv($endMinutes, 60), $endMinutes % 60);
+        }
+        if ($currentMinutes < $endMinutes) {
+            return $local->setTime(intdiv($endMinutes, 60), $endMinutes % 60);
+        }
+
+        return $local;
+    }
+
+    private function minutes(string $time): int
+    {
+        [$hours, $minutes] = array_map('intval', explode(':', $time, 2));
+
+        return ($hours * 60) + $minutes;
     }
 }

@@ -85,3 +85,25 @@ export interface NotificationPreferences {
   quietFrom: string
   quietUntil: string
 }
+
+export interface InAppNotification {
+  id: string
+  purchaseId: string
+  deadlineId: string
+  kind: DeadlineType
+  merchant: string
+  dueOn: string
+  message: string
+  readAt: string | null
+  createdAt: string | null
+}
+
+export interface ScheduledReminder {
+  id: string
+  channel: 'in_app' | 'email'
+  intervalDays: number
+  remindAt: string
+  purchaseId: string
+  merchant: string
+  kind: DeadlineType
+}

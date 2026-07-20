@@ -4,8 +4,8 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { appStore } from '../stores/app'
 import { deadlineDistance, formatDate, formatMoney } from '../lib/format'
+import { appStore } from '../stores/app'
 import type { Deadline } from '../types'
 
 const allDeadlines = computed(() =>
@@ -13,32 +13,64 @@ const allDeadlines = computed(() =>
     .flatMap((purchase) => [purchase.returnDeadline, purchase.warrantyDeadline])
     .filter((deadline): deadline is Deadline => Boolean(deadline))
     .filter((deadline) => deadline.daysLeft >= 0)
-    .sort((a, b) => a.daysLeft - b.daysLeft),
+    .sort((left, right) => left.daysLeft - right.daysLeft),
 )
-
+const upcomingReturns = computed(() =>
+  allDeadlines.value.filter((deadline) => deadline.type === 'return' && deadline.daysLeft <= 30),
+)
+const activeWarranties = computed(() =>
+  allDeadlines.value.filter((deadline) => deadline.type === 'warranty'),
+)
+const nextDeadline = computed(() => allDeadlines.value[0])
 const nextPurchase = computed(() =>
-  appStore.state.purchases.find(
-    (purchase) => purchase.returnDeadline?.id === allDeadlines.value[0]?.id,
+  appStore.state.purchases.find((purchase) =>
+    [purchase.returnDeadline?.id, purchase.warrantyDeadline?.id].includes(nextDeadline.value?.id),
   ),
 )
+const reviewDocument = computed(() => appStore.reviewDocuments.value[0])
+const reviewPurchase = computed(() =>
+  appStore.state.purchases.find((purchase) => purchase.id === reviewDocument.value?.purchaseId),
+)
+const nextReminder = computed(() => appStore.state.scheduledReminders[0])
+const latestUnread = computed(() => appStore.unreadNotifications.value[0])
+const storedDocuments = computed(
+  () => appStore.state.purchases.filter((purchase) => purchase.documentId).length,
+)
+const todayLabel = computed(() =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: appStore.state.user.timezone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date()),
+)
+const reminderDate = (value: string): string =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: appStore.state.user.timezone,
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(value))
 </script>
 
 <template>
   <div class="page-stack">
     <PageHeader
-      eyebrow="Monday, July 20"
+      :eyebrow="todayLabel"
       :title="`Good morning, ${appStore.state.user.name.split(' ')[0]}.`"
       description="Here is what needs attention across your household."
     />
 
-    <section v-if="allDeadlines[0] && nextPurchase" class="deadline-spotlight">
+    <section v-if="nextDeadline && nextPurchase" class="deadline-spotlight">
       <div class="deadline-spotlight__date">
-        <small>{{ formatDate(allDeadlines[0].dueOn, { month: 'short' }).toUpperCase() }}</small>
-        <strong>{{ formatDate(allDeadlines[0].dueOn, { day: 'numeric' }) }}</strong>
+        <small>{{ formatDate(nextDeadline.dueOn, { month: 'short' }).toUpperCase() }}</small>
+        <strong>{{ formatDate(nextDeadline.dueOn, { day: 'numeric' }) }}</strong>
       </div>
       <div class="deadline-spotlight__copy">
-        <p class="eyebrow">Next action · {{ deadlineDistance(allDeadlines[0].daysLeft) }}</p>
-        <h2>Return window for {{ nextPurchase.items[0]?.name }}</h2>
+        <p class="eyebrow">Next action · {{ deadlineDistance(nextDeadline.daysLeft) }}</p>
+        <h2>
+          {{ nextDeadline.type === 'return' ? 'Return window' : 'Warranty expires' }} for
+          {{ nextPurchase.items[0]?.name }}
+        </h2>
         <p>
           {{ nextPurchase.merchant }} ·
           {{ formatMoney(nextPurchase.totalMinor, nextPurchase.currency) }}
@@ -57,16 +89,23 @@ const nextPurchase = computed(() =>
     <section class="metric-grid" aria-label="Household summary">
       <article>
         <span class="metric-icon metric-icon--amber"><AppIcon name="clock" /></span>
-        <div><strong>2</strong><span>Returns this month</span></div>
-        <small>Next in 4 days</small>
+        <div>
+          <strong>{{ upcomingReturns.length }}</strong
+          ><span>Returns in the next 30 days</span>
+        </div>
+        <small v-if="upcomingReturns[0]">{{ deadlineDistance(upcomingReturns[0].daysLeft) }}</small>
+        <small v-else>No return action due</small>
       </article>
       <article>
         <span class="metric-icon"><AppIcon name="shield" /></span>
         <div>
-          <strong>{{ appStore.activePurchases.value.length }}</strong
+          <strong>{{ activeWarranties.length }}</strong
           ><span>Active warranties</span>
         </div>
-        <small>All documents stored</small>
+        <small
+          >{{ storedDocuments }} private
+          {{ storedDocuments === 1 ? 'document' : 'documents' }}</small
+        >
       </article>
       <article>
         <span class="metric-icon metric-icon--blue"><AppIcon name="spark" /></span>
@@ -74,10 +113,7 @@ const nextPurchase = computed(() =>
           <strong>{{ appStore.reviewDocuments.value.length }}</strong
           ><span>Needs your review</span>
         </div>
-        <RouterLink
-          v-if="appStore.reviewDocuments.value[0]"
-          :to="`/app/review/${appStore.reviewDocuments.value[0].id}`"
-        >
+        <RouterLink v-if="reviewDocument" :to="`/app/review/${reviewDocument.id}`">
           Review now <AppIcon name="arrow" :size="15" />
         </RouterLink>
         <small v-else>Everything is reviewed</small>
@@ -95,7 +131,7 @@ const nextPurchase = computed(() =>
             >View all <AppIcon name="arrow" :size="15"
           /></RouterLink>
         </div>
-        <ol class="compact-deadlines">
+        <ol v-if="allDeadlines.length" class="compact-deadlines">
           <li v-for="deadline in allDeadlines.slice(0, 4)" :key="deadline.id">
             <span class="date-tile date-tile--small">
               <b>{{ formatDate(deadline.dueOn, { day: 'numeric' }) }}</b>
@@ -112,6 +148,7 @@ const nextPurchase = computed(() =>
             </StatusPill>
           </li>
         </ol>
+        <p v-else class="panel-note">No active deadlines. Add a purchase to calculate one.</p>
       </section>
 
       <aside class="panel activity-panel">
@@ -129,20 +166,38 @@ const nextPurchase = computed(() =>
           </div>
         </div>
         <ul class="activity-list">
-          <li>
+          <li v-if="reviewDocument">
             <span class="activity-dot"></span>
             <p>
-              <strong>Receipt ready for review</strong
-              ><small>Brightline Home · 18 minutes ago</small>
+              <strong>Receipt ready for review</strong>
+              <small
+                >{{ reviewPurchase?.merchant ?? reviewDocument.filename }} · Human check
+                required</small
+              >
             </p>
           </li>
-          <li>
-            <span class="activity-dot activity-dot--muted"></span>
-            <p><strong>Reminder scheduled</strong><small>North & Pine · July 17</small></p>
+          <li v-if="latestUnread">
+            <span class="activity-dot"></span>
+            <p>
+              <strong>In-app reminder delivered</strong>
+              <small>{{ latestUnread.merchant }} · Due {{ latestUnread.dueOn }}</small>
+            </p>
           </li>
-          <li>
+          <li v-if="nextReminder">
             <span class="activity-dot activity-dot--muted"></span>
-            <p><strong>Purchase confirmed</strong><small>Westfield Electronics · July 9</small></p>
+            <p>
+              <strong
+                >{{ nextReminder.channel === 'email' ? 'Email' : 'In-app' }} reminder
+                scheduled</strong
+              >
+              <small>{{ nextReminder.merchant }} · {{ reminderDate(nextReminder.remindAt) }}</small>
+            </p>
+          </li>
+          <li v-if="!reviewDocument && !latestUnread && !nextReminder">
+            <span class="activity-dot activity-dot--muted"></span>
+            <p>
+              <strong>Nothing waiting</strong><small>Processing and reminders are clear.</small>
+            </p>
           </li>
         </ul>
       </aside>

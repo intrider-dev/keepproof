@@ -83,6 +83,26 @@ final class ReminderWorkflowTest extends TestCase
         self::assertGreaterThanOrEqual(10, Reminder::query()->where('status', ReminderStatus::Cancelled)->count());
     }
 
+    public function test_quiet_hours_shift_email_but_not_in_app_delivery_in_the_user_timezone(): void
+    {
+        [$owner, $household] = $this->householdWithOwner();
+        $owner->notificationPreference()->create([
+            'in_app_enabled' => true,
+            'email_enabled' => true,
+            'return_intervals' => [3],
+            'warranty_intervals' => [],
+            'quiet_hours_start' => '08:00',
+            'quiet_hours_end' => '10:30',
+        ]);
+
+        $this->createPurchase($owner, $household);
+
+        $inApp = Reminder::query()->where('channel', ReminderChannel::InApp)->firstOrFail();
+        $email = Reminder::query()->where('channel', ReminderChannel::Email)->firstOrFail();
+        self::assertSame('2026-08-16 13:00:00', $inApp->remind_at->format('Y-m-d H:i:s'));
+        self::assertSame('2026-08-16 14:30:00', $email->remind_at->format('Y-m-d H:i:s'));
+    }
+
     public function test_in_app_delivery_is_sent_once_and_visible_only_to_the_recipient(): void
     {
         [$owner, $household] = $this->householdWithOwner();
@@ -99,7 +119,9 @@ final class ReminderWorkflowTest extends TestCase
         $this->assertDatabaseCount('notifications', 1);
         $this->actingAs($owner)->getJson('/api/v1/notifications')
             ->assertOk()
-            ->assertJsonPath('data.0.data.purchase_id', $reminder->deadline->purchase_id);
+            ->assertJsonPath('data.0.data.purchase_id', $reminder->deadline->purchase_id)
+            ->assertJsonMissingPath('data.0.notifiable_id')
+            ->assertJsonMissingPath('data.0.notifiable_type');
         $this->actingAs($other)->getJson('/api/v1/notifications')
             ->assertOk()
             ->assertJsonCount(0, 'data');

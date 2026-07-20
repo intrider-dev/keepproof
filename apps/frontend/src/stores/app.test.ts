@@ -119,6 +119,21 @@ describe('connected application store', () => {
               ],
             },
           ],
+          scheduled_reminders: [
+            {
+              id: '01K00000000000000000000008',
+              channel: 'in_app',
+              status: 'scheduled',
+              interval_days: 3,
+              remind_at: '2026-08-04T13:00:00Z',
+              deadline: {
+                id: '01K00000000000000000000006',
+                kind: 'return',
+                purchase_id: purchaseId,
+                merchant: 'Northstar Home',
+              },
+            },
+          ],
         },
       },
       [`/api/v1/households/${householdId}/members`]: {
@@ -145,6 +160,25 @@ describe('connected application store', () => {
           timezone: 'America/New_York',
         },
       },
+      '/api/v1/notifications?per_page=20': {
+        data: [
+          {
+            id: '8dc2072b-0d44-4c42-ac12-ec9ea694ac2e',
+            data: {
+              purchase_id: purchaseId,
+              deadline_id: '01K00000000000000000000006',
+              kind: 'return',
+              merchant: 'Northstar Home',
+              due_on: 'August 7, 2026',
+              message: 'Return deadline for Northstar Home is approaching.',
+            },
+            read_at: null,
+            created_at: '2026-07-20T13:00:00Z',
+          },
+        ],
+        links: {},
+        meta: {},
+      },
     }
     const fetchMock = vi.fn<typeof fetch>(async (input) => {
       const url =
@@ -168,8 +202,13 @@ describe('connected application store', () => {
       '139.50',
     )
     expect(appStore.state.members[0]).toMatchObject({ role: 'Owner', email: 'alex@example.test' })
+    expect(appStore.unreadNotifications.value).toHaveLength(1)
+    expect(appStore.state.scheduledReminders[0]).toMatchObject({
+      merchant: 'Northstar Home',
+      intervalDays: 3,
+    })
     expect(appStore.state.preferences.reminderDays).toEqual([30, 7, 3, 1])
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 
   it('does not load protected household data before email verification', async () => {

@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import type {
   Deadline as ApiDeadline,
   HouseholdCollection,
+  InAppNotificationCollection,
   NotificationPreferencesResponse,
   Purchase as ApiPurchase,
   PurchaseCollection,
@@ -17,15 +18,19 @@ import {
   defaultNotificationPreferences,
   documentFixtures,
   memberFixtures,
+  notificationFixtures,
   purchaseFixtures,
+  scheduledReminderFixtures,
 } from '../demo/fixtures'
 import type {
   Deadline,
   ExtractionField,
   HouseholdMember,
+  InAppNotification,
   NotificationPreferences,
   Purchase,
   ReceiptDocument,
+  ScheduledReminder,
 } from '../types'
 
 const clone = <T>(value: T): T => structuredClone(value)
@@ -46,6 +51,8 @@ const state = reactive({
   purchases: clone(purchaseFixtures),
   documents: clone(documentFixtures),
   members: clone(memberFixtures),
+  notifications: clone(notificationFixtures),
+  scheduledReminders: clone(scheduledReminderFixtures),
   preferences: clone(defaultNotificationPreferences),
 })
 
@@ -64,6 +71,8 @@ const resetFixtures = (): void => {
   state.purchases = clone(purchaseFixtures)
   state.documents = clone(documentFixtures)
   state.members = clone(memberFixtures)
+  state.notifications = clone(notificationFixtures)
+  state.scheduledReminders = clone(scheduledReminderFixtures)
   state.preferences = clone(defaultNotificationPreferences)
 }
 
@@ -406,6 +415,19 @@ interface HouseholdMemberCollection {
 interface DashboardResponse {
   data: {
     needs_review: ApiReceiptDocument[]
+    scheduled_reminders: Array<{
+      id: string
+      channel: 'in_app' | 'email'
+      status: 'scheduled'
+      interval_days: number
+      remind_at: string
+      deadline: {
+        id: string
+        kind: 'return' | 'warranty'
+        purchase_id: string
+        merchant: string
+      }
+    }>
   }
 }
 
@@ -413,6 +435,8 @@ const resetRemoteCollections = (): void => {
   state.purchases = []
   state.documents = []
   state.members = []
+  state.notifications = []
+  state.scheduledReminders = []
 }
 
 const deadlineUrgency = (daysLeft: number): Deadline['urgency'] => {
@@ -575,11 +599,12 @@ const hydrateRemoteWorkspace = async (): Promise<void> => {
   state.user.householdId = household.id
   state.user.householdName = household.name
 
-  const [purchases, dashboard, members, preferences] = await Promise.all([
+  const [purchases, dashboard, members, preferences, notifications] = await Promise.all([
     apiRequest<PurchaseCollection>(`/households/${household.id}/purchases?per_page=100`),
     apiRequest<DashboardResponse>(`/households/${household.id}/dashboard`),
     apiRequest<HouseholdMemberCollection>(`/households/${household.id}/members`),
     apiRequest<NotificationPreferencesResponse>('/notification-preferences'),
+    apiRequest<InAppNotificationCollection>('/notifications?per_page=20'),
   ])
 
   state.purchases = purchases.data.map(mapPurchase)
@@ -602,6 +627,28 @@ const hydrateRemoteWorkspace = async (): Promise<void> => {
       .join('')
       .slice(0, 2)
       .toUpperCase(),
+  }))
+  state.scheduledReminders = dashboard.data.scheduled_reminders.map(
+    (reminder): ScheduledReminder => ({
+      id: reminder.id,
+      channel: reminder.channel,
+      intervalDays: reminder.interval_days,
+      remindAt: reminder.remind_at,
+      purchaseId: reminder.deadline.purchase_id,
+      merchant: reminder.deadline.merchant,
+      kind: reminder.deadline.kind,
+    }),
+  )
+  state.notifications = notifications.data.map((notification): InAppNotification => ({
+    id: notification.id,
+    purchaseId: notification.data.purchase_id,
+    deadlineId: notification.data.deadline_id,
+    kind: notification.data.kind,
+    merchant: notification.data.merchant,
+    dueOn: notification.data.due_on,
+    message: notification.data.message,
+    readAt: notification.read_at,
+    createdAt: notification.created_at,
   }))
   const quietHours = Boolean(preferences.data.quiet_hours_start && preferences.data.quiet_hours_end)
   state.preferences = {
@@ -782,6 +829,22 @@ const updatePreferences = async (preferences: NotificationPreferences): Promise<
   showToast('Notification preferences saved.')
 }
 
+const markNotificationRead = async (notificationId: string): Promise<void> => {
+  const notification = state.notifications.find((candidate) => candidate.id === notificationId)
+  if (!notification || notification.readAt) return
+
+  if (state.demoMode) {
+    notification.readAt = new Date().toISOString()
+    return
+  }
+
+  const response = await apiRequest<{ data: { id: string; read_at: string } }>(
+    `/notifications/${notificationId}/read`,
+    { method: 'PUT' },
+  )
+  notification.readAt = response.data.read_at
+}
+
 const deleteAccount = async (password: string): Promise<void> => {
   if (state.demoMode) {
     deleteDemoAccount()
@@ -804,11 +867,16 @@ const reviewDocuments = computed(() =>
   state.documents.filter((document) => document.state === 'needs_review'),
 )
 
+const unreadNotifications = computed(() =>
+  state.notifications.filter((notification) => notification.readAt === null),
+)
+
 export const appStore = {
   state,
   toast,
   activePurchases,
   reviewDocuments,
+  unreadNotifications,
   startDemo,
   signOut,
   activateRemoteSession,
@@ -822,5 +890,6 @@ export const appStore = {
   createManualPurchase,
   addMember,
   updatePreferences,
+  markNotificationRead,
   deleteAccount,
 }
