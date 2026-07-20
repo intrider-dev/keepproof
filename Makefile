@@ -33,6 +33,9 @@ quality:
 	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer check
 	$(FRONTEND) npm run quality
 
+e2e: export APP_URL=http://nginx:8080
+e2e: export FRONTEND_URL=http://nginx:8080
+e2e: export OCR_DRIVER=fixture
 e2e: up
 	$(COMPOSE) --profile tools run --rm e2e
 
