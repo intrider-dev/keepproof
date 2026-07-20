@@ -9,6 +9,9 @@ output
 !**/.env.example
 **/vendor
 **/node_modules
+/apps/backend/vendor
+/apps/frontend/node_modules
+/packages/deadline-engine/vendor
 **/dist
 **/coverage
 **/.phpunit.cache

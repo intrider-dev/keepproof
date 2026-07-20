@@ -9,12 +9,18 @@ ARG REDIS_EXTENSION_VERSION=6.3.0
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
         curl \
+        libfreetype6 \
         libfreetype6-dev \
         libicu-dev \
+        libicu76 \
+        libjpeg62-turbo \
         libjpeg62-turbo-dev \
+        libpng16-16t64 \
         libpng-dev \
         libpq-dev \
+        libpq5 \
         libzip-dev \
+        libzip5 \
         poppler-utils \
         procps \
         qpdf \
@@ -22,7 +28,7 @@ RUN apt-get update \
         tesseract-ocr-eng \
         unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pcntl pdo_pgsql zip \
+    && docker-php-ext-install -j"$(nproc)" bcmath gd intl pcntl pdo_pgsql zip \
     && pecl install "redis-${REDIS_EXTENSION_VERSION}" \
     && docker-php-ext-enable redis \
     && apt-get purge --auto-remove --yes \
@@ -45,7 +51,7 @@ FROM php-base AS development-dependencies
 WORKDIR /workspace/apps/backend
 COPY apps/backend/composer.json apps/backend/composer.lock ./
 COPY packages/deadline-engine /workspace/packages/deadline-engine
-RUN composer install --no-interaction --prefer-dist --no-progress
+RUN composer install --no-interaction --prefer-dist --no-progress --no-scripts
 
 FROM php-base AS development
 
@@ -53,6 +59,7 @@ WORKDIR /workspace/apps/backend
 COPY --from=development-dependencies --chown=app:app /workspace/apps/backend/vendor ./vendor
 COPY --chown=app:app apps/backend ./
 COPY --chown=app:app packages /workspace/packages
+RUN composer dump-autoload --optimize --no-interaction
 USER app
 
 EXPOSE 8000
