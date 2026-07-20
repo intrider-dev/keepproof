@@ -61,7 +61,8 @@ final class TesseractReceiptContractTest extends TestCase
     private function requireBinary(string $binary): void
     {
         try {
-            $probe = Process::timeout(5)->run([$binary, '--version']);
+            $versionFlag = $binary === 'pdftoppm' ? '-v' : '--version';
+            $probe = Process::timeout(5)->run([$binary, $versionFlag]);
         } catch (\Throwable) {
             self::markTestSkipped($binary.' is available in the backend container, not on this host.');
         }

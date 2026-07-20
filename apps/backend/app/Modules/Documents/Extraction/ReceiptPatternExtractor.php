@@ -67,7 +67,7 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
         [$value, $label] = $captured;
 
         $normalized = match ($key) {
-            'currency' => strtoupper($value),
+            'currency', 'receipt_number' => strtoupper($value),
             default => trim($value),
         };
         $errors = [];
@@ -153,7 +153,7 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
     private function capture(string $text, string $label): ?string
     {
         $matches = [];
-        $pattern = '/^'.preg_quote($label, '/').'\s*:?\s+(?<value>[^\r\n]{1,240})$/mi';
+        $pattern = '/^'.preg_quote($label, '/').'\s*[:,;]?\s+(?<value>[^\r\n]{1,240})$/mi';
 
         if (preg_match($pattern, $text, $matches) !== 1) {
             return null;
@@ -201,7 +201,7 @@ final class ReceiptPatternExtractor implements ReceiptDataExtractor
     private function addCurrencyFromTotal(array &$fields, string $text): void
     {
         $matches = [];
-        if (preg_match('/^TOTAL\s*:?\s+(?<currency>[A-Z]{3})\s+\d/mi', $text, $matches) !== 1) {
+        if (preg_match('/^TOTAL\s*[:,;]?\s+(?<currency>[A-Z]{3})\s+\d/mi', $text, $matches) !== 1) {
             return;
         }
 
