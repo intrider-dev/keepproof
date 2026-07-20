@@ -129,7 +129,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-keepproof}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-keepproof_local_only}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keepproof} -d ${POSTGRES_DB:-keepproof}"]
       interval: 5s
