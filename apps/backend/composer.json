@@ -48,6 +48,7 @@
         "format:check": "pint --test",
         "security": "@composer audit --locked --no-interaction",
         "test": [
+            "@putenv APP_ENV=testing",
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],

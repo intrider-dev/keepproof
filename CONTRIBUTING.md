@@ -41,7 +41,7 @@ make down
 For a narrow feedback loop, run commands in the relevant container:
 
 ```bash
-docker compose run --rm backend php artisan test --filter=TenantIsolation
+docker compose run --rm backend composer test -- --filter=TenantIsolation
 docker compose run --rm backend vendor/bin/pint --test
 docker compose run --rm backend vendor/bin/phpstan analyse --no-progress --memory-limit=1G
 docker compose run --rm --workdir /workspace/packages/deadline-engine backend composer check
