@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      target: production
+    command: ["php-fpm", "--nodaemonize"]
+    volumes: []
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+
+  queue-worker:
+    build:
+      target: production
+    volumes: []
+
+  scheduler:
+    build:
+      target: production
+    volumes: []
+
+  frontend:
+    profiles: ["development-only"]
+
+  nginx:
+    image: keepproof-nginx:local
+    build:
+      context: .
+      dockerfile: infra/docker/nginx/Dockerfile
+      target: production
+      args:
+        NODE_VERSION: 24.18.0
+    volumes: []
+    depends_on: !override
+      backend:
+        condition: service_started

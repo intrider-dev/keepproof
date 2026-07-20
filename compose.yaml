@@ -1,0 +1,236 @@
+name: keepproof
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: infra/docker/backend/Dockerfile
+    target: development
+    args:
+      PHP_VERSION: 8.5.8
+  working_dir: /workspace/apps/backend
+  init: true
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    APP_ENV: local
+    APP_DEBUG: "true"
+    APP_URL: http://localhost:${APP_PORT:-8080}
+    FRONTEND_URL: http://localhost:${APP_PORT:-8080}
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: debug
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: ${POSTGRES_DB:-keepproof}
+    DB_USERNAME: ${POSTGRES_USER:-keepproof}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:-keepproof_local_only}
+    CACHE_STORE: redis
+    QUEUE_CONNECTION: redis
+    SESSION_DRIVER: database
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-keepproof_local_only}
+    FILESYSTEM_DISK: s3
+    AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-keepproof-local}
+    AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-keepproof-local-secret}
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_BUCKET: ${S3_BUCKET:-keepproof-private}
+    AWS_ENDPOINT: http://object-storage:8333
+    AWS_URL: http://localhost:8333/${S3_BUCKET:-keepproof-private}
+    AWS_USE_PATH_STYLE_ENDPOINT: "true"
+    MAIL_MAILER: smtp
+    MAIL_HOST: mailpit
+    MAIL_PORT: 1025
+    MAIL_FROM_ADDRESS: notifications@keepproof.local
+    MAIL_FROM_NAME: KeepProof
+    OCR_DRIVER: tesseract
+    EXTERNAL_AI_ENABLED: "false"
+  volumes:
+    - ./:/workspace
+    - backend_vendor:/workspace/apps/backend/vendor
+    - deadline_vendor:/workspace/packages/deadline-engine/vendor
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  backend:
+    <<: *backend
+    command: ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  queue-worker:
+    <<: *backend
+    command:
+      - php
+      - artisan
+      - queue:work
+      - redis
+      - --queue=documents,exports,notifications,default
+      - --sleep=1
+      - --tries=3
+      - --backoff=30
+      - --timeout=180
+      - --max-time=3600
+    stop_signal: SIGTERM
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  scheduler:
+    <<: *backend
+    command: ["php", "artisan", "schedule:work"]
+    stop_signal: SIGTERM
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' >/dev/null"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend/Dockerfile
+      target: development
+      args:
+        NODE_VERSION: 24.18.0
+    working_dir: /workspace/apps/frontend
+    init: true
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      VITE_DEMO_MODE: "true"
+    volumes:
+      - ./:/workspace
+      - frontend_node_modules:/workspace/apps/frontend/node_modules
+    command: ["npm", "run", "dev", "--", "--host=0.0.0.0", "--port=5173"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:5173"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+
+  postgres:
+    image: postgres:18.4-alpine3.23
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keepproof}
+      POSTGRES_USER: ${POSTGRES_USER:-keepproof}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-keepproof_local_only}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keepproof} -d ${POSTGRES_DB:-keepproof}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.2.7-alpine3.22
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-keepproof_local_only}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-keepproof_local_only}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  object-storage:
+    image: chrislusf/seaweedfs:4.39
+    command: ["mini", "-dir=/data", "-ip.bind=0.0.0.0"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-keepproof-local}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-keepproof-local-secret}
+      S3_BUCKET: ${S3_BUCKET:-keepproof-private}
+    ports:
+      - "8333:8333"
+    volumes:
+      - object_storage_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.30.4
+    ports:
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.30.4-alpine3.24
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ./infra/nginx/development.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.61.1-noble
+    profiles: ["tools"]
+    init: true
+    working_dir: /workspace/apps/frontend
+    environment:
+      PLAYWRIGHT_BASE_URL: http://nginx:8080
+      CI: "true"
+    volumes:
+      - ./:/workspace
+      - frontend_node_modules:/workspace/apps/frontend/node_modules
+      - ./output/playwright:/workspace/output/playwright
+    depends_on:
+      nginx:
+        condition: service_healthy
+    command: ["npm", "run", "test:e2e"]
+
+volumes:
+  backend_vendor:
+    name: keepproof_backend_vendor
+  deadline_vendor:
+    name: keepproof_deadline_vendor
+  frontend_node_modules:
+    name: keepproof_frontend_node_modules
+  postgres_data:
+    name: keepproof_postgres_data
+  redis_data:
+    name: keepproof_redis_data
+  object_storage_data:
+    name: keepproof_object_storage_data
+  mailpit_data:
+    name: keepproof_mailpit_data

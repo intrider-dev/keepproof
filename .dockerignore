@@ -1,0 +1,16 @@
+.git
+.github
+.tools
+.idea
+.vscode
+output
+**/.env
+**/.env.*
+!**/.env.example
+**/vendor
+**/node_modules
+**/dist
+**/coverage
+**/.phpunit.cache
+**/storage/logs/*
+**/database/*.sqlite
