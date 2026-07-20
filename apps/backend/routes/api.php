@@ -50,6 +50,8 @@ Route::prefix('v1')->group(function (): void {
             Route::patch('/households/{household}', [HouseholdController::class, 'update']);
             Route::get('/households/{household}/members', [HouseholdMemberController::class, 'index']);
             Route::delete('/households/{household}/members/{member}', [HouseholdMemberController::class, 'destroy']);
+            Route::put('/households/{household}/owner', [HouseholdMemberController::class, 'transferOwnership'])
+                ->middleware(['password.recent', 'throttle:3,1']);
             Route::post('/households/{household}/invitations', [HouseholdInvitationController::class, 'store']);
             Route::post('/invitations/{invitation}/accept', [HouseholdInvitationController::class, 'accept']);
             Route::get('/households/{household}/dashboard', [DashboardController::class, 'show']);

@@ -154,6 +154,66 @@ final class ExportAndPrivacyTest extends TestCase
         ]);
     }
 
+    public function test_account_deletion_is_blocked_while_an_owned_household_has_other_members(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $member = User::factory()->create();
+        HouseholdMember::query()->create([
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+            'role' => HouseholdRole::Member,
+            'joined_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->deleteJson('/api/v1/account')
+            ->assertConflict()
+            ->assertJsonPath('code', 'shared_household_ownership');
+
+        $this->assertDatabaseHas('users', ['id' => $owner->id]);
+        $this->assertDatabaseHas('households', ['id' => $household->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'account.deletion_blocked',
+            'actor_user_id' => $owner->id,
+        ]);
+    }
+
+    public function test_former_owner_can_delete_their_account_without_deleting_the_transferred_household(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $newOwner = User::factory()->create();
+        HouseholdMember::query()->create([
+            'household_id' => $household->id,
+            'user_id' => $newOwner->id,
+            'role' => HouseholdRole::Member,
+            'joined_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->putJson('/api/v1/households/'.$household->id.'/owner', [
+                'member_user_id' => $newOwner->id,
+            ])
+            ->assertOk();
+        $this->actingAs($owner)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->deleteJson('/api/v1/account')
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('users', ['id' => $owner->id]);
+        $this->assertDatabaseHas('users', ['id' => $newOwner->id]);
+        $this->assertDatabaseHas('households', [
+            'id' => $household->id,
+            'owner_user_id' => $newOwner->id,
+        ]);
+        $this->assertDatabaseHas('household_members', [
+            'household_id' => $household->id,
+            'user_id' => $newOwner->id,
+            'role' => HouseholdRole::Owner->value,
+        ]);
+    }
+
     private function createPurchase(User $owner, Household $household): Purchase
     {
         $response = $this->actingAs($owner)

@@ -302,6 +302,19 @@ const addDemoMember = (email: string): void => {
   showToast(`Demo invitation created for ${email}.`)
 }
 
+const removeDemoMember = (memberId: string): void => {
+  const member = state.members.find((candidate) => candidate.id === memberId)
+  state.members = state.members.filter((candidate) => candidate.id !== memberId)
+  showToast(`${member?.name ?? 'Member'} removed from the demo household.`)
+}
+
+const transferDemoOwnership = (memberId: string): void => {
+  const target = state.members.find((candidate) => candidate.id === memberId)
+  if (!target || target.role !== 'Member') throw new Error('Choose an existing household member.')
+  for (const member of state.members) member.role = member.id === memberId ? 'Owner' : 'Member'
+  showToast(`Demo household ownership transferred to ${target.name}.`)
+}
+
 const updateDemoPreferences = (preferences: NotificationPreferences): void => {
   state.preferences = clone(preferences)
   showToast('Notification preferences saved.')
@@ -809,6 +822,40 @@ const addMember = async (email: string): Promise<void> => {
   showToast(`Invitation sent to ${email}.`)
 }
 
+const removeMember = async (memberId: string): Promise<void> => {
+  if (state.demoMode) {
+    removeDemoMember(memberId)
+    return
+  }
+  if (!state.user.householdId) throw new Error('No household is selected.')
+
+  const member = state.members.find((candidate) => candidate.id === memberId)
+  await apiRequest<void>(`/households/${state.user.householdId}/members/${memberId}`, {
+    method: 'DELETE',
+  })
+  state.members = state.members.filter((candidate) => candidate.id !== memberId)
+  showToast(`${member?.name ?? 'Member'} removed from the household.`)
+}
+
+const transferOwnership = async (memberId: string, password: string): Promise<void> => {
+  if (state.demoMode) {
+    transferDemoOwnership(memberId)
+    return
+  }
+  if (!state.user.householdId) throw new Error('No household is selected.')
+
+  await apiRequest('/auth/confirm-password', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+  await apiRequest(`/households/${state.user.householdId}/owner`, {
+    method: 'PUT',
+    body: JSON.stringify({ member_user_id: memberId }),
+  })
+  await hydrateRemoteWorkspace()
+  showToast('Household ownership transferred. Your membership remains active.')
+}
+
 const updatePreferences = async (preferences: NotificationPreferences): Promise<void> => {
   if (state.demoMode) {
     updateDemoPreferences(preferences)
@@ -890,6 +937,8 @@ export const appStore = {
   confirmExtraction,
   createManualPurchase,
   addMember,
+  removeMember,
+  transferOwnership,
   updatePreferences,
   markNotificationRead,
   deleteAccount,

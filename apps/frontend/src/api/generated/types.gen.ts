@@ -630,6 +630,10 @@ export type DeleteAccountErrors = {
     403: ProblemDetails & {
         code?: 'password_confirmation_required';
     };
+    /**
+     * Deletion is blocked until ownership of every shared household is transferred or its other members are removed.
+     */
+    409: ProblemDetails;
 };
 
 export type DeleteAccountError = DeleteAccountErrors[keyof DeleteAccountErrors];
@@ -786,6 +790,51 @@ export type RemoveHouseholdMemberResponses = {
 };
 
 export type RemoveHouseholdMemberResponse = RemoveHouseholdMemberResponses[keyof RemoveHouseholdMemberResponses];
+
+export type TransferHouseholdOwnershipData = {
+    body: {
+        member_user_id: Ulid;
+    };
+    path: {
+        household: Ulid;
+    };
+    query?: never;
+    url: '/api/v1/households/{household}/owner';
+};
+
+export type TransferHouseholdOwnershipErrors = {
+    /**
+     * Recent password confirmation is required.
+     */
+    403: ProblemDetails & {
+        code?: 'password_confirmation_required';
+    };
+    /**
+     * The resource is missing or hidden by tenant isolation.
+     */
+    404: ProblemDetails;
+    /**
+     * Request validation failed.
+     */
+    422: ProblemDetails & {
+        errors: {
+            [key: string]: Array<string>;
+        };
+    };
+};
+
+export type TransferHouseholdOwnershipError = TransferHouseholdOwnershipErrors[keyof TransferHouseholdOwnershipErrors];
+
+export type TransferHouseholdOwnershipResponses = {
+    /**
+     * Ownership and both membership roles changed in one transaction.
+     */
+    200: {
+        data: Household;
+    };
+};
+
+export type TransferHouseholdOwnershipResponse = TransferHouseholdOwnershipResponses[keyof TransferHouseholdOwnershipResponses];
 
 export type InviteHouseholdMemberData = {
     body: {

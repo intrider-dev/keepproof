@@ -225,3 +225,21 @@ describe('connected application store', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('demo household membership', () => {
+  it('supports fixture removal and ownership transfer without an API request', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+    appStore.startDemo()
+
+    await appStore.transferOwnership('member-sam', '')
+    expect(appStore.state.members.find((member) => member.id === 'member-sam')?.role).toBe('Owner')
+    expect(appStore.state.members.find((member) => member.id === 'member-alex')?.role).toBe(
+      'Member',
+    )
+
+    await appStore.removeMember('member-alex')
+    expect(appStore.state.members.map((member) => member.id)).toEqual(['member-sam'])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})

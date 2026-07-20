@@ -3476,6 +3476,32 @@ ol {
   font-size: 0.66rem;
 }
 
+.member-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.button-link {
+  padding: 4px 2px;
+  border: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.button-link--danger {
+  color: var(--red-dark);
+}
+
+.button-link:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .invite-panel > h2 {
   margin-block: 13px 8px;
   font-size: 1.25rem;
@@ -3495,6 +3521,33 @@ ol {
   margin-top: 21px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
+}
+
+.ownership-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.75fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.ownership-panel h2 {
+  margin-block: 5px 7px;
+  font-size: 1.12rem;
+}
+
+.ownership-panel > div > p:last-child {
+  max-width: 66ch;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.ownership-form {
+  display: grid;
+  gap: 12px;
+}
+
+.ownership-form .button {
+  justify-self: start;
 }
 
 .privacy-dashboard {
@@ -4193,6 +4246,7 @@ ol {
   .detail-grid,
   .review-layout,
   .household-grid,
+  .ownership-panel,
   .privacy-grid,
   .delete-layout {
     grid-template-columns: 1fr;
@@ -4559,9 +4613,9 @@ ol {
     justify-self: start;
   }
 
-  .member-list .icon-button {
-    grid-row: 1 / span 2;
-    grid-column: 3;
+  .member-actions {
+    grid-column: 2 / -1;
+    flex-wrap: wrap;
   }
 
   .household-summary {

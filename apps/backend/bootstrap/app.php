@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounts\Exceptions\SharedHouseholdOwnershipBlocksDeletion;
 use App\Modules\Accounts\Http\Middleware\RequireRecentPasswordConfirmation;
 use App\Modules\Shared\Http\Middleware\AssignCorrelationId;
 use App\Modules\Shared\Http\ProblemDetails;
@@ -48,6 +49,16 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return ProblemDetails::response($request, 401, 'Authentication is required for this request.');
+        });
+
+        $exceptions->render(static function (SharedHouseholdOwnershipBlocksDeletion $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ProblemDetails::response($request, 409, $exception->getMessage(), [
+                'code' => 'shared_household_ownership',
+            ]);
         });
 
         $exceptions->render(static function (HttpExceptionInterface $exception, Request $request) {

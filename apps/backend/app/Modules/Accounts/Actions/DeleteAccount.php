@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounts\Actions;
 
+use App\Modules\Accounts\Exceptions\SharedHouseholdOwnershipBlocksDeletion;
 use App\Modules\Accounts\Models\User;
 use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Households\Models\Household;
@@ -18,6 +19,18 @@ final readonly class DeleteAccount
 
     public function execute(User $user): void
     {
+        $sharedOwnedHouseholdExists = Household::query()
+            ->where('owner_user_id', $user->id)
+            ->has('memberships', '>', 1)
+            ->exists();
+        if ($sharedOwnedHouseholdExists) {
+            $this->audit->record('account.deletion_blocked', $user, subject: $user, metadata: [
+                'reason' => 'shared_household_ownership',
+            ]);
+
+            throw new SharedHouseholdOwnershipBlocksDeletion;
+        }
+
         $householdIds = Household::query()->where('owner_user_id', $user->id)->pluck('id');
         $documents = ReceiptDocument::query()->whereIn('household_id', $householdIds)->get([
             'id', 'storage_disk', 'storage_key',

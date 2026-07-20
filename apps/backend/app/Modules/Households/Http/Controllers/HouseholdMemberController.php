@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Households\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Households\Actions\TransferHouseholdOwnership;
 use App\Modules\Households\Enums\HouseholdRole;
+use App\Modules\Households\Http\Requests\TransferHouseholdOwnershipRequest;
 use App\Modules\Households\Http\Resources\HouseholdMemberResource;
+use App\Modules\Households\Http\Resources\HouseholdResource;
 use App\Modules\Households\Models\Household;
 use App\Modules\Shared\Audit\AuditRecorder;
 use Illuminate\Http\Request;
@@ -24,6 +27,21 @@ final class HouseholdMemberController extends Controller
         return HouseholdMemberResource::collection(
             $household->memberships()->with('user')->orderBy('joined_at')->get(),
         );
+    }
+
+    public function transferOwnership(
+        TransferHouseholdOwnershipRequest $request,
+        Household $household,
+        TransferHouseholdOwnership $transferOwnership,
+    ): HouseholdResource {
+        $this->authorize('manageMembers', $household);
+        $updated = $transferOwnership->execute(
+            $this->authenticatedUser($request),
+            $household,
+            $request->memberUserId(),
+        );
+
+        return new HouseholdResource($updated);
     }
 
     /** @throws ValidationException */

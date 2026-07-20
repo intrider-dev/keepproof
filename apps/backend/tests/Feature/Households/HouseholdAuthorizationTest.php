@@ -129,6 +129,81 @@ final class HouseholdAuthorizationTest extends TestCase
             ->assertJsonPath('errors.member.0', 'The household owner cannot be removed.');
     }
 
+    public function test_ownership_transfer_requires_recent_password_and_changes_authority_atomically(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        $member = User::factory()->create(['name' => 'New owner']);
+        HouseholdMember::query()->create([
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+            'role' => HouseholdRole::Member,
+            'joined_at' => now(),
+        ]);
+        $url = '/api/v1/households/'.$household->id.'/owner';
+
+        $this->actingAs($owner)
+            ->putJson($url, ['member_user_id' => $member->id])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'password_confirmation_required');
+
+        $this->actingAs($owner)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->putJson($url, ['member_user_id' => $member->id])
+            ->assertOk()
+            ->assertJsonPath('data.is_personal', false);
+
+        $this->assertDatabaseHas('households', [
+            'id' => $household->id,
+            'owner_user_id' => $member->id,
+            'is_personal' => false,
+        ]);
+        $this->assertDatabaseHas('household_members', [
+            'household_id' => $household->id,
+            'user_id' => $owner->id,
+            'role' => HouseholdRole::Member->value,
+        ]);
+        $this->assertDatabaseHas('household_members', [
+            'household_id' => $household->id,
+            'user_id' => $member->id,
+            'role' => HouseholdRole::Owner->value,
+        ]);
+        self::assertSame(1, HouseholdMember::query()
+            ->where('household_id', $household->id)
+            ->where('role', HouseholdRole::Owner)
+            ->count());
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'household.ownership_transferred',
+            'actor_user_id' => $owner->id,
+            'household_id' => $household->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->patchJson('/api/v1/households/'.$household->id, ['name' => 'Former owner edit'])
+            ->assertForbidden();
+        $this->actingAs($member)
+            ->patchJson('/api/v1/households/'.$household->id, ['name' => 'New owner edit'])
+            ->assertOk();
+    }
+
+    public function test_ownership_cannot_be_transferred_to_a_non_member(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        $nonMember = User::factory()->create();
+
+        $this->actingAs($owner)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->putJson('/api/v1/households/'.$household->id.'/owner', [
+                'member_user_id' => $nonMember->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.member_user_id.0',
+                'The new owner must already be a member of this household.',
+            );
+
+        self::assertSame($owner->id, $household->refresh()->owner_user_id);
+    }
+
     /** @return array{User, Household} */
     private function householdWithOwner(string $name): array
     {

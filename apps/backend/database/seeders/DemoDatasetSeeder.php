@@ -51,6 +51,13 @@ final class DemoDatasetSeeder extends Seeder
 
         $existing = User::query()->where('email', self::EMAIL)->first();
         if ($existing !== null) {
+            // The production delete flow must reject shared owned households. This local-only
+            // reset first removes the known synthetic guest membership so the same invariant
+            // remains enforced for every user-triggered deletion.
+            HouseholdMember::query()
+                ->whereIn('household_id', Household::query()->where('owner_user_id', $existing->id)->select('id'))
+                ->where('user_id', '!=', $existing->id)
+                ->delete();
             $deleteAccount->execute($existing);
         }
 
