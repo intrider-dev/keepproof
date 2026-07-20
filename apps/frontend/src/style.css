@@ -1328,8 +1328,42 @@ ol {
   backdrop-filter: blur(14px);
 }
 
+.auth-story__login-visual {
+  position: relative;
+  height: clamp(190px, 27vh, 250px);
+  overflow: hidden;
+  border: 1px solid rgb(255 253 248 / 75%);
+  border-radius: 15px;
+  background: #e7e7dc;
+  box-shadow: 0 18px 42px rgb(45 68 51 / 12%);
+}
+
+.auth-story__login-visual::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(46 72 52 / 6%);
+  content: '';
+  pointer-events: none;
+}
+
+.auth-story__login-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-story__card > .feature-icon {
+  position: relative;
+  z-index: 2;
+  margin: -25px 0 0 18px;
+  border: 4px solid rgb(248 248 240 / 88%);
+  box-shadow: 0 9px 22px rgb(45 68 51 / 15%);
+}
+
 .auth-story blockquote {
-  margin-top: 45px;
+  margin-top: 22px;
   color: var(--ink);
   font-family: var(--font-display);
   font-size: clamp(1.8rem, 3vw, 2.6rem);
