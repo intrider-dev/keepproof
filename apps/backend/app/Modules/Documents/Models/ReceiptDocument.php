@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $extraction_provider
  * @property string|null $prompt_version
  * @property int $processing_attempts
+ * @property CarbonImmutable|null $processing_dispatched_at
  * @property string $correlation_id
  * @property string|null $last_error_code
  * @property string|null $user_error
@@ -68,6 +69,7 @@ final class ReceiptDocument extends Model
         'extraction_provider',
         'prompt_version',
         'processing_attempts',
+        'processing_dispatched_at',
         'correlation_id',
         'last_error_code',
         'user_error',
@@ -113,6 +115,7 @@ final class ReceiptDocument extends Model
             'size_bytes' => 'integer',
             'raw_ocr_text' => 'encrypted',
             'processing_attempts' => 'integer',
+            'processing_dispatched_at' => 'immutable_datetime',
             'retain_original' => 'boolean',
             'processed_at' => 'immutable_datetime',
         ];

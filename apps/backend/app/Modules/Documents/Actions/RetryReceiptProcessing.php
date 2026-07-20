@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Actions;
 
 use App\Modules\Documents\Enums\DocumentState;
-use App\Modules\Documents\Jobs\ProcessReceipt;
 use App\Modules\Documents\Models\ReceiptDocument;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -13,7 +12,10 @@ use Throwable;
 
 final readonly class RetryReceiptProcessing
 {
-    public function __construct(private TransitionDocumentState $transitionState) {}
+    public function __construct(
+        private TransitionDocumentState $transitionState,
+        private DispatchReceiptProcessing $dispatchProcessing,
+    ) {}
 
     public function execute(ReceiptDocument $document, string $correlationId): ReceiptDocument
     {
@@ -35,7 +37,7 @@ final readonly class RetryReceiptProcessing
         );
 
         try {
-            ProcessReceipt::dispatch($document->id, $correlationId)->onQueue('documents');
+            $this->dispatchProcessing->execute($document, $correlationId);
         } catch (Throwable $exception) {
             $document->update([
                 'last_error_code' => 'queue_dispatch_unavailable',

@@ -6,7 +6,6 @@ namespace App\Modules\Documents\Actions;
 
 use App\Modules\Accounts\Models\User;
 use App\Modules\Documents\Enums\DocumentState;
-use App\Modules\Documents\Jobs\ProcessReceipt;
 use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Households\Models\Household;
 use App\Modules\Purchases\Enums\PurchaseState;
@@ -28,6 +27,7 @@ final readonly class UploadReceipt
     public function __construct(
         private SanitizeReceiptUpload $sanitizer,
         private TransitionDocumentState $transitionState,
+        private DispatchReceiptProcessing $dispatchProcessing,
         private AuditRecorder $audit,
     ) {}
 
@@ -150,7 +150,7 @@ final readonly class UploadReceipt
         }
 
         try {
-            ProcessReceipt::dispatch($document->id, $correlationId)->onQueue('documents');
+            $this->dispatchProcessing->execute($document, $correlationId);
         } catch (Throwable $exception) {
             $document->update([
                 'last_error_code' => 'queue_dispatch_unavailable',

@@ -19,11 +19,14 @@ use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Households\Enums\HouseholdRole;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Models\HouseholdMember;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Tests\Fakes\FailingBusDispatcher;
 use Tests\TestCase;
 
 final class ReceiptWorkflowTest extends TestCase
@@ -302,6 +305,60 @@ final class ReceiptWorkflowTest extends TestCase
         $this->actingAs($owner)
             ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
             ->assertNotFound();
+    }
+
+    public function test_queue_dispatch_outage_keeps_reconcilable_database_work(): void
+    {
+        $this->app->instance(Dispatcher::class, new FailingBusDispatcher);
+        [$owner, $household] = $this->householdWithOwner('Alex');
+
+        $response = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0012')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->image('receipt.png', 100, 100),
+            ])
+            ->assertAccepted()
+            ->assertJsonPath('data.state', 'validation_pending');
+
+        $documentId = $response->json('data.id');
+        self::assertIsString($documentId);
+        $document = ReceiptDocument::query()->findOrFail($documentId);
+        self::assertNull($document->processing_dispatched_at);
+        self::assertSame('queue_dispatch_unavailable', $document->last_error_code);
+        Storage::disk('receipts')->assertExists($document->storage_key);
+    }
+
+    public function test_reconciler_dispatches_only_stale_database_backed_work(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $stale = $this->uploadImage($owner, $household, 'upload-proof-0013');
+        $fresh = $this->uploadImage($owner, $household, 'upload-proof-0014');
+        $stale->forceFill([
+            'processing_dispatched_at' => now()->subMinutes(10),
+            'last_error_code' => 'queue_dispatch_unavailable',
+            'user_error' => 'Receipt processing is delayed and will be retried safely.',
+        ])->save();
+        config()->set('receipt_processing.reconcile_after_seconds', 300);
+        Queue::fake();
+
+        self::assertSame(0, Artisan::call('keepproof:receipts:reconcile'));
+        self::assertStringContainsString(
+            'dispatched 1 job(s); 0 dispatch(es) failed',
+            Artisan::output(),
+        );
+
+        Queue::assertPushed(
+            ProcessReceipt::class,
+            static fn (ProcessReceipt $job): bool => $job->documentId === $stale->id,
+        );
+        Queue::assertNotPushed(
+            ProcessReceipt::class,
+            static fn (ProcessReceipt $job): bool => $job->documentId === $fresh->id,
+        );
+        $stale->refresh();
+        self::assertNotNull($stale->processing_dispatched_at);
+        self::assertNull($stale->last_error_code);
+        self::assertNull($stale->user_error);
     }
 
     private function uploadImage(User $owner, Household $household, string $key): ReceiptDocument

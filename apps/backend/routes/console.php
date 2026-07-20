@@ -12,3 +12,7 @@ Artisan::command('inspire', function () {
 Schedule::call(static fn () => app(DispatchDueReminders::class)->execute())
     ->name('dispatch-due-reminders')
     ->everyMinute();
+
+Schedule::command('keepproof:receipts:reconcile')
+    ->name('reconcile-receipt-processing')
+    ->everyMinute();
