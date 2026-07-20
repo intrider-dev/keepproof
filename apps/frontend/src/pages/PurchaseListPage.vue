@@ -5,7 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 import { deadlineDistance, formatDate, formatMoney } from '../lib/format'
 
 const search = ref('')
@@ -14,7 +14,7 @@ const deadline = ref('all')
 
 const filteredPurchases = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return demoStore.state.purchases.filter((purchase) => {
+  return appStore.state.purchases.filter((purchase) => {
     const matchesSearch =
       !query ||
       purchase.merchant.toLowerCase().includes(query) ||

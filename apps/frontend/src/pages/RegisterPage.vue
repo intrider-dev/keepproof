@@ -3,8 +3,9 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import BrandMark from '../components/BrandMark.vue'
 import AppIcon from '../components/AppIcon.vue'
+import type { UserResponse } from '../api/generated'
 import { ApiProblem, apiRequest } from '../lib/api'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 import { validateRegistration, type ValidationErrors } from '../validation'
 
 const router = useRouter()
@@ -12,8 +13,6 @@ const form = reactive({ name: '', email: '', password: '', timezone: 'America/Ne
 const errors = ref<ValidationErrors>({})
 const requestError = ref('')
 const busy = ref(false)
-const demoEnabled = import.meta.env.VITE_DEMO_MODE !== 'false'
-
 const submit = async (): Promise<void> => {
   if (busy.value) return
   errors.value = validateRegistration(form.name, form.email, form.password)
@@ -22,20 +21,17 @@ const submit = async (): Promise<void> => {
 
   busy.value = true
   try {
-    if (!demoEnabled) {
-      await apiRequest('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(form),
-      })
-    }
-    demoStore.signInDemo(form.name.trim(), form.email.trim())
-    demoStore.state.demoMode = demoEnabled
-    await router.push('/app/dashboard')
-    demoStore.showToast(
-      demoEnabled
-        ? 'Your private demo household is ready.'
-        : 'Account created. Check your email to verify it.',
-    )
+    const response = await apiRequest<UserResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...form,
+        password_confirmation: form.password,
+        locale: 'en',
+      }),
+    })
+    await appStore.activateRemoteSession(response)
+    await router.push('/verify-email')
+    appStore.showToast('Account created. Check your email to verify it.')
   } catch (error) {
     requestError.value =
       error instanceof ApiProblem
@@ -118,13 +114,7 @@ const submit = async (): Promise<void> => {
         <p v-if="requestError" class="form-alert" role="alert">{{ requestError }}</p>
         <button class="button button--primary button--full" type="submit" :disabled="busy">
           <span v-if="busy" class="spinner" aria-hidden="true"></span>
-          {{
-            busy
-              ? 'Creating your household…'
-              : demoEnabled
-                ? 'Create demo household'
-                : 'Create account'
-          }}
+          {{ busy ? 'Creating your household…' : 'Create account' }}
         </button>
         <p class="form-fine-print">
           <AppIcon name="shield" :size="16" />

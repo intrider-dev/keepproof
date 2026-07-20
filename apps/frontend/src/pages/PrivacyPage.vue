@@ -4,24 +4,45 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { demoStore } from '../demo/store'
-import { downloadTextFile } from '../lib/download'
+import { appStore } from '../stores/app'
+import { ApiProblem, apiDownload, apiRequest } from '../lib/api'
+import { downloadBlob, downloadTextFile } from '../lib/download'
 
 const exporting = ref(false)
 const exportReady = ref(false)
+const exportPassword = ref('')
+const exportError = ref('')
 const removeAfterExtraction = ref(false)
 
-const exportAccount = (): void => {
+const exportAccount = async (): Promise<void> => {
   if (exporting.value) return
   exporting.value = true
+  exportError.value = ''
   try {
+    if (!appStore.state.demoMode) {
+      if (!exportPassword.value) {
+        exportError.value = 'Enter your password to authorize this export.'
+        return
+      }
+      await apiRequest('/auth/confirm-password', {
+        method: 'POST',
+        body: JSON.stringify({ password: exportPassword.value }),
+      })
+      const archive = await apiDownload('/account/export')
+      downloadBlob('keepproof-account-export.zip', archive)
+      exportPassword.value = ''
+      exportReady.value = true
+      appStore.showToast('Your private account export was downloaded.')
+      return
+    }
+
     const data = {
       generated_at: new Date().toISOString(),
       demo_notice: 'Synthetic local demo data',
-      account: demoStore.state.user,
-      memberships: demoStore.state.members,
-      purchases: demoStore.state.purchases,
-      notification_preferences: demoStore.state.preferences,
+      account: appStore.state.user,
+      memberships: appStore.state.members,
+      purchases: appStore.state.purchases,
+      notification_preferences: appStore.state.preferences,
     }
     downloadTextFile(
       'keepproof-demo-export.json',
@@ -29,7 +50,12 @@ const exportAccount = (): void => {
       'application/json',
     )
     exportReady.value = true
-    demoStore.showToast('Your synthetic account export was downloaded.')
+    appStore.showToast('Your synthetic account export was downloaded.')
+  } catch (caught) {
+    exportError.value =
+      caught instanceof ApiProblem
+        ? caught.problem.detail
+        : 'The account export could not be prepared.'
   } finally {
     exporting.value = false
   }
@@ -62,7 +88,7 @@ const exportAccount = (): void => {
         <div>
           <p class="eyebrow">Private storage</p>
           <h2>
-            {{ demoStore.state.purchases.filter((purchase) => purchase.documentId).length }} receipt
+            {{ appStore.state.purchases.filter((purchase) => purchase.documentId).length }} receipt
             files
           </h2>
           <p>Connected downloads use authorized links that expire after a short period.</p>
@@ -91,15 +117,30 @@ const exportAccount = (): void => {
         </div>
         <p>
           Your export includes profile settings, memberships, confirmed purchases, deadlines, and
-          the synthetic demo records available to this account.
+          the receipt files you chose to retain.
         </p>
+        <label v-if="!appStore.state.demoMode" class="field">
+          <span>Confirm your password</span>
+          <input
+            v-model="exportPassword"
+            class="input"
+            type="password"
+            autocomplete="current-password"
+            :aria-invalid="Boolean(exportError && !exportPassword)"
+          />
+        </label>
         <div v-if="exportReady" class="callout callout--green" role="status">
           <AppIcon name="check" />
           <p>
-            <strong>Export downloaded</strong>The browser generated a local JSON demo export.
-            Connected exports also package authorized documents.
+            <strong>Export downloaded</strong>
+            {{
+              appStore.state.demoMode
+                ? 'The browser generated a synthetic JSON fixture export.'
+                : 'The backend packaged authorized account data and retained documents.'
+            }}
           </p>
         </div>
+        <p v-if="exportError" class="form-alert" role="alert">{{ exportError }}</p>
         <button
           class="button button--primary"
           type="button"

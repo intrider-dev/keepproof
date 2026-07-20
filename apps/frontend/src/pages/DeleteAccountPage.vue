@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
+import { ApiProblem } from '../lib/api'
 import { deletionPhraseIsValid } from '../validation'
 
 const router = useRouter()
@@ -12,6 +13,7 @@ const password = ref('')
 const understood = ref(false)
 const busy = ref(false)
 const attempted = ref(false)
+const requestError = ref('')
 
 const canDelete = computed(
   () => deletionPhraseIsValid(phrase.value) && password.value.length > 0 && understood.value,
@@ -21,9 +23,13 @@ const submit = async (): Promise<void> => {
   attempted.value = true
   if (busy.value || !canDelete.value) return
   busy.value = true
+  requestError.value = ''
   try {
-    demoStore.deleteDemoAccount()
+    await appStore.deleteAccount(password.value)
     await router.push({ path: '/', query: { deleted: '1' } })
+  } catch (caught) {
+    requestError.value =
+      caught instanceof ApiProblem ? caught.problem.detail : 'The account could not be deleted.'
   } finally {
     busy.value = false
   }
@@ -39,7 +45,7 @@ const submit = async (): Promise<void> => {
     <PageHeader
       eyebrow="Permanent action"
       title="Delete your KeepProof account"
-      description="This clears the local demo immediately. Connected mode first removes private files, then relational account data."
+      description="Fixture mode clears browser state. Connected mode first removes private files, then relational account data."
     />
 
     <div class="delete-layout">
@@ -86,15 +92,18 @@ const submit = async (): Promise<void> => {
           </div>
           <label class="danger-check">
             <input v-model="understood" type="checkbox" />
-            <span>I understand that this removes the synthetic demo records and signs me out.</span>
+            <span
+              >I understand that this permanently removes my account data and signs me out.</span
+            >
           </label>
+          <p v-if="requestError" class="form-alert" role="alert">{{ requestError }}</p>
           <button
             class="button button--danger button--full"
             type="submit"
             :disabled="busy || !canDelete"
           >
             <span v-if="busy" class="spinner" aria-hidden="true"></span>
-            {{ busy ? 'Deleting demo data…' : 'Permanently delete account' }}
+            {{ busy ? 'Deleting account data…' : 'Permanently delete account' }}
           </button>
         </form>
       </section>

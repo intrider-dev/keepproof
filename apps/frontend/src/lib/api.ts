@@ -52,7 +52,7 @@ export const ensureCsrfCookie = async (): Promise<void> => {
 const isUnsafe = (method: string): boolean =>
   !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
 
-export const apiRequest = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+const apiResponse = async (path: string, init: RequestInit = {}): Promise<Response> => {
   const method = init.method ?? 'GET'
   const headers = new Headers(init.headers)
 
@@ -102,8 +102,18 @@ export const apiRequest = async <T>(path: string, init: RequestInit = {}): Promi
     throw new ApiProblem(problem)
   }
 
+  return response
+}
+
+export const apiRequest = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const response = await apiResponse(path, init)
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+export const apiDownload = async (path: string, init: RequestInit = {}): Promise<Blob> => {
+  const response = await apiResponse(path, init)
+  return response.blob()
 }
 
 export const resetCsrfForTests = (): void => {

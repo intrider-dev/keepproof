@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import AppIcon, { type IconName } from './AppIcon.vue'
 import BrandMark from './BrandMark.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,7 +25,7 @@ const pageTitle = computed(() =>
 )
 
 const signOut = async (): Promise<void> => {
-  demoStore.signOut()
+  await appStore.signOut()
   await router.push('/')
 }
 </script>
@@ -41,7 +41,7 @@ const signOut = async (): Promise<void> => {
       <div class="workspace-switcher">
         <span class="avatar avatar--small">MH</span>
         <span>
-          <strong>{{ demoStore.state.user.householdName }}</strong>
+          <strong>{{ appStore.state.user.householdName }}</strong>
           <small>Private workspace</small>
         </span>
       </div>
@@ -51,11 +51,11 @@ const signOut = async (): Promise<void> => {
           <AppIcon :name="item.icon" />
           <span>{{ item.label }}</span>
           <span
-            v-if="item.to === '/app/purchases' && demoStore.reviewDocuments.value.length"
+            v-if="item.to === '/app/purchases' && appStore.reviewDocuments.value.length"
             class="nav-count"
-            :aria-label="`${demoStore.reviewDocuments.value.length} purchases need review`"
+            :aria-label="`${appStore.reviewDocuments.value.length} purchases need review`"
           >
-            {{ demoStore.reviewDocuments.value.length }}
+            {{ appStore.reviewDocuments.value.length }}
           </span>
         </RouterLink>
       </nav>
@@ -71,14 +71,14 @@ const signOut = async (): Promise<void> => {
         <div class="demo-chip"><span></span> Local demo</div>
         <button class="sidebar-user" type="button" @click="signOut">
           <span class="avatar">{{
-            demoStore.state.user.name
+            appStore.state.user.name
               .split(' ')
               .map((part) => part[0])
               .join('')
               .slice(0, 2)
           }}</span>
           <span>
-            <strong>{{ demoStore.state.user.name }}</strong>
+            <strong>{{ appStore.state.user.name }}</strong>
             <small>Sign out</small>
           </span>
           <AppIcon name="logout" :size="18" />

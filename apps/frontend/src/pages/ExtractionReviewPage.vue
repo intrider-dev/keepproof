@@ -5,17 +5,19 @@ import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ExtractionFieldEditor from '../components/ExtractionFieldEditor.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
+import { ApiProblem } from '../lib/api'
 import { validateExtraction, type ValidationErrors } from '../validation'
 
 const route = useRoute()
 const router = useRouter()
-const document = computed(() => demoStore.documentById(String(route.params.documentId)))
+const document = computed(() => appStore.documentById(String(route.params.documentId)))
 const values = reactive<Record<string, string>>({})
 const errors = ref<ValidationErrors>({})
 const acknowledged = ref(false)
 const acknowledgementError = ref('')
 const busy = ref(false)
+const requestError = ref('')
 
 for (const field of document.value?.fields ?? []) values[field.key] = field.value
 
@@ -44,9 +46,17 @@ const submit = async (): Promise<void> => {
   }
 
   busy.value = true
+  requestError.value = ''
   try {
-    const purchaseId = demoStore.confirmExtraction(document.value.id, values)
+    const purchaseId = await appStore.confirmExtraction(document.value.id, values)
     await router.push(`/app/purchases/${purchaseId}`)
+  } catch (error) {
+    requestError.value =
+      error instanceof ApiProblem
+        ? error.problem.detail
+        : error instanceof Error
+          ? error.message
+          : 'Purchase confirmation failed.'
   } finally {
     busy.value = false
   }
@@ -144,6 +154,8 @@ const submit = async (): Promise<void> => {
             {{ acknowledgementError }}
           </p>
         </div>
+
+        <p v-if="requestError" class="form-alert" role="alert">{{ requestError }}</p>
 
         <div class="sticky-form-actions">
           <RouterLink class="button button--quiet" to="/app/purchases">Save for later</RouterLink>

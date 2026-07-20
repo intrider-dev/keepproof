@@ -3,8 +3,9 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import BrandMark from '../components/BrandMark.vue'
+import type { UserResponse } from '../api/generated'
 import { ApiProblem, apiRequest } from '../lib/api'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 import { validateLogin, type ValidationErrors } from '../validation'
 
 const route = useRoute()
@@ -30,19 +31,14 @@ const submit = async (): Promise<void> => {
 
   busy.value = true
   try {
-    if (demoEnabled) {
-      if (form.email !== 'demo@keepproof.local' || form.password !== 'KeepProof!2026') {
-        requestError.value = 'Use the local demo credentials shown below.'
-        return
-      }
-      demoStore.signInDemo()
-    } else {
-      await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(form),
-      })
-      demoStore.signInDemo('Connected user', form.email)
-      demoStore.state.demoMode = false
+    const response = await apiRequest<UserResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(form),
+    })
+    const verified = await appStore.activateRemoteSession(response)
+    if (!verified) {
+      await router.push('/verify-email')
+      return
     }
     const redirect =
       typeof route.query.redirect === 'string' ? route.query.redirect : '/app/dashboard'

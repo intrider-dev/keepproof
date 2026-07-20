@@ -3,21 +3,25 @@ import { ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
+import { ApiProblem } from '../lib/api'
 import { validateInviteEmail } from '../validation'
 
 const email = ref('')
 const error = ref('')
 const busy = ref(false)
 
-const invite = (): void => {
+const invite = async (): Promise<void> => {
   if (busy.value) return
   error.value = validateInviteEmail(email.value) ?? ''
   if (error.value) return
   busy.value = true
   try {
-    demoStore.addMember(email.value.trim())
+    await appStore.addMember(email.value.trim())
     email.value = ''
+  } catch (caught) {
+    error.value =
+      caught instanceof ApiProblem ? caught.problem.detail : 'The invitation could not be created.'
   } finally {
     busy.value = false
   }
@@ -27,7 +31,7 @@ const invite = (): void => {
 <template>
   <div class="page-stack">
     <PageHeader
-      eyebrow="Morgan household"
+      :eyebrow="appStore.state.user.householdName"
       title="Proof shared with the right people"
       description="Members can view household purchases and documents. Only the owner can manage membership and household exports."
     />
@@ -36,8 +40,8 @@ const invite = (): void => {
       <div class="household-monogram">MH</div>
       <div>
         <p class="eyebrow">Private workspace</p>
-        <h2>{{ demoStore.state.user.householdName }}</h2>
-        <p>{{ demoStore.state.members.length }} members · Created July 2026</p>
+        <h2>{{ appStore.state.user.householdName }}</h2>
+        <p>{{ appStore.state.members.length }} members · Private workspace</p>
       </div>
       <StatusPill tone="green"><AppIcon name="shield" :size="14" /> Tenant isolated</StatusPill>
     </div>
@@ -49,15 +53,15 @@ const invite = (): void => {
             <p class="eyebrow">Access</p>
             <h2>Household members</h2>
           </div>
-          <span>{{ demoStore.state.members.length }} total</span>
+          <span>{{ appStore.state.members.length }} total</span>
         </div>
         <ul class="member-list">
-          <li v-for="member in demoStore.state.members" :key="member.id">
+          <li v-for="member in appStore.state.members" :key="member.id">
             <span class="avatar">{{ member.initials }}</span>
             <div>
               <strong
                 >{{ member.name }}
-                <span v-if="member.email === demoStore.state.user.email">(you)</span></strong
+                <span v-if="member.email === appStore.state.user.email">(you)</span></strong
               ><small>{{ member.email }}</small>
             </div>
             <StatusPill :tone="member.role === 'Owner' ? 'green' : 'neutral'">{{
@@ -92,10 +96,17 @@ const invite = (): void => {
               :aria-describedby="error ? 'invite-error' : 'invite-help'"
             />
           </label>
-          <p id="invite-help" class="field-hint">Demo invitations stay local and send no email.</p>
+          <p id="invite-help" class="field-hint">
+            {{
+              appStore.state.demoMode
+                ? 'Fixture-demo invitations stay in this browser.'
+                : 'The invitee receives a time-limited email invitation.'
+            }}
+          </p>
           <p v-if="error" id="invite-error" class="field-error">{{ error }}</p>
           <button class="button button--primary button--full" type="submit" :disabled="busy">
-            <AppIcon name="plus" :size="17" /> Create demo invitation
+            <AppIcon name="plus" :size="17" />
+            {{ appStore.state.demoMode ? 'Create demo invitation' : 'Send invitation' }}
           </button>
         </form>
       </aside>

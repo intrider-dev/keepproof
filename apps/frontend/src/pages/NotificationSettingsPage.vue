@@ -2,11 +2,13 @@
 import { reactive, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
+import { ApiProblem } from '../lib/api'
 import type { NotificationPreferences } from '../types'
 
-const form = reactive<NotificationPreferences>(structuredClone(demoStore.state.preferences))
+const form = reactive<NotificationPreferences>(structuredClone(appStore.state.preferences))
 const busy = ref(false)
+const requestError = ref('')
 const reminderOptions = [30, 14, 7, 3, 1]
 
 const toggleReminder = (days: number): void => {
@@ -15,11 +17,15 @@ const toggleReminder = (days: number): void => {
     : [...form.reminderDays, days].sort((a, b) => b - a)
 }
 
-const save = (): void => {
+const save = async (): Promise<void> => {
   if (busy.value) return
   busy.value = true
+  requestError.value = ''
   try {
-    demoStore.updatePreferences(form)
+    await appStore.updatePreferences(form)
+  } catch (caught) {
+    requestError.value =
+      caught instanceof ApiProblem ? caught.problem.detail : 'Preferences could not be saved.'
   } finally {
     busy.value = false
   }
@@ -29,7 +35,7 @@ const save = (): void => {
 <template>
   <div class="page-stack settings-page">
     <PageHeader
-      eyebrow="Your timezone · America/New_York"
+      :eyebrow="`Your timezone · ${appStore.state.user.timezone}`"
       title="Reminders that arrive at a useful time"
       description="Choose how early KeepProof should remind you. Changing a deadline rebuilds its unsent reminder schedule."
     />
@@ -54,7 +60,7 @@ const save = (): void => {
           <label class="setting-row">
             <span
               ><strong>Email reminders</strong
-              ><small>Send to {{ demoStore.state.user.email }}.</small></span
+              ><small>Send to {{ appStore.state.user.email }}.</small></span
             >
             <input v-model="form.email" class="switch" type="checkbox" />
           </label>
@@ -116,13 +122,18 @@ const save = (): void => {
 
         <div class="settings-actions">
           <p>
-            <AppIcon name="check" :size="17" /> Demo preferences stay in memory until you leave the
-            demo.
+            <AppIcon name="check" :size="17" />
+            {{
+              appStore.state.demoMode
+                ? 'Fixture-demo preferences stay in memory until you leave.'
+                : 'Saved preferences apply to new and recalculated reminders.'
+            }}
           </p>
           <button class="button button--primary" type="submit" :disabled="busy">
             Save preferences
           </button>
         </div>
+        <p v-if="requestError" class="form-alert" role="alert">{{ requestError }}</p>
       </div>
 
       <aside class="panel reminder-preview">
@@ -148,7 +159,7 @@ const save = (): void => {
           </div>
           <div>
             <dt>Timezone</dt>
-            <dd>America/New_York</dd>
+            <dd>{{ appStore.state.user.timezone }}</dd>
           </div>
           <div>
             <dt>Duplicate protection</dt>

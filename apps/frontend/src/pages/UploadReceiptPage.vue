@@ -3,12 +3,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 
 const router = useRouter()
 const step = ref(1)
 const selectedName = ref('')
 const selectedSize = ref('')
+const selectedFile = ref<File>()
 const fileError = ref('')
 const allowExternalAi = ref(false)
 const busy = ref(false)
@@ -26,15 +27,28 @@ const chooseFile = (event: Event): void => {
     fileError.value = 'Choose a file smaller than 10 MB.'
     return
   }
+  selectedFile.value = file
   selectedName.value = file.name
   selectedSize.value = `${(file.size / 1024 / 1024).toFixed(1)} MB`
 }
 
-const useSynthetic = (): void => {
-  selectedName.value = 'synthetic-evergreen-receipt.png'
-  selectedSize.value = '184 KB'
+const useSynthetic = async (): Promise<void> => {
   fileError.value = ''
-  step.value = 2
+  try {
+    if (!appStore.state.demoMode) {
+      const response = await fetch('/demo/northstar-receipt.png')
+      if (!response.ok) throw new Error('Synthetic receipt unavailable.')
+      const blob = await response.blob()
+      selectedFile.value = new File([blob], 'northstar-receipt.png', { type: 'image/png' })
+      selectedSize.value = `${(blob.size / 1024).toFixed(0)} KB`
+    } else {
+      selectedSize.value = '9 KB'
+    }
+    selectedName.value = 'northstar-receipt.png'
+    step.value = 2
+  } catch {
+    fileError.value = 'The synthetic receipt could not be loaded. Choose a local file instead.'
+  }
 }
 
 const continueFromFile = (): void => {
@@ -48,10 +62,13 @@ const continueFromFile = (): void => {
 const processReceipt = async (): Promise<void> => {
   if (busy.value) return
   busy.value = true
+  fileError.value = ''
   try {
-    const documentId = demoStore.createSyntheticUpload()
+    const documentId = await appStore.uploadReceipt(selectedFile.value)
     await router.push(`/app/review/${documentId}`)
-    demoStore.showToast('Local extraction complete. Review the proposed values.', 'info')
+    appStore.showToast('Local extraction complete. Review the proposed values.', 'info')
+  } catch (error) {
+    fileError.value = error instanceof Error ? error.message : 'Receipt processing failed.'
   } finally {
     busy.value = false
   }
@@ -209,7 +226,7 @@ const processReceipt = async (): Promise<void> => {
           <p class="eyebrow">Step 3 of 3</p>
           <h2 id="process-step-title">Ready for local extraction</h2>
           <p>
-            The demo will create field-level results for you to review. No deadline is active yet.
+            KeepProof will create field-level results for you to review. No deadline is active yet.
           </p>
         </div>
       </div>
@@ -220,7 +237,7 @@ const processReceipt = async (): Promise<void> => {
         </div>
         <div>
           <dt>Processing</dt>
-          <dd>Local fixture extractor</dd>
+          <dd>{{ appStore.state.demoMode ? 'Local fixture extractor' : 'Local OCR worker' }}</dd>
         </div>
         <div>
           <dt>External AI</dt>
@@ -233,11 +250,16 @@ const processReceipt = async (): Promise<void> => {
       </dl>
       <div class="callout callout--green">
         <AppIcon name="shield" />
-        <p>
-          <strong>Demo boundary</strong>The selected browser file is not uploaded or read. The demo
-          uses deterministic synthetic extraction data.
+        <p v-if="appStore.state.demoMode">
+          <strong>Demo boundary</strong>The selected browser file is not uploaded or read. This
+          explicit fixture demo uses deterministic synthetic extraction data.
+        </p>
+        <p v-else>
+          <strong>Private processing</strong>The selected file is uploaded to private object
+          storage, then processed by the local queue worker. External AI stays off.
         </p>
       </div>
+      <p v-if="fileError" class="form-alert" role="alert">{{ fileError }}</p>
       <div class="wizard-actions">
         <button class="button button--quiet" type="button" @click="step = 2">Back</button>
         <button

@@ -2,12 +2,12 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BrandMark from '../components/BrandMark.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 
 const router = useRouter()
 
 onMounted(async () => {
-  demoStore.startDemo()
+  appStore.startDemo()
   await router.replace('/app/dashboard')
 })
 </script>

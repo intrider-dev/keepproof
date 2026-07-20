@@ -34,9 +34,18 @@ export const validateExtraction = (values: Record<string, string>): ValidationEr
   if (!/^[A-Z]{3}$/.test(values.currency ?? '')) {
     errors.currency = 'Use a three-letter currency code.'
   }
+  if (!values.country?.trim()) errors.country = 'Country or region is required.'
   const total = Number(values.total)
   if (!Number.isFinite(total) || total < 0) errors.total = 'Enter a valid non-negative total.'
   if (!values.itemName?.trim()) errors.itemName = 'Add at least one item.'
+  const returnPeriod = Number.parseInt(values.returnPeriod ?? '', 10)
+  if (!Number.isInteger(returnPeriod) || returnPeriod <= 0) {
+    errors.returnPeriod = 'Enter a positive return period.'
+  }
+  const warrantyPeriod = Number.parseInt(values.warrantyPeriod ?? '', 10)
+  if (!Number.isInteger(warrantyPeriod) || warrantyPeriod <= 0) {
+    errors.warrantyPeriod = 'Enter a positive warranty period.'
+  }
   return errors
 }
 

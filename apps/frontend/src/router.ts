@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { demoStore } from './demo/store'
+import { appStore } from './stores/app'
 import AppShell from './components/AppShell.vue'
 import LandingPage from './pages/LandingPage.vue'
 import LoginPage from './pages/LoginPage.vue'
 import RegisterPage from './pages/RegisterPage.vue'
+import EmailVerificationPage from './pages/EmailVerificationPage.vue'
 import DemoEntryPage from './pages/DemoEntryPage.vue'
 import DashboardPage from './pages/DashboardPage.vue'
 import PurchaseListPage from './pages/PurchaseListPage.vue'
@@ -24,6 +25,11 @@ const router = createRouter({
     { path: '/', component: LandingPage, meta: { title: 'Private receipt tracking' } },
     { path: '/login', component: LoginPage, meta: { title: 'Sign in' } },
     { path: '/register', component: RegisterPage, meta: { title: 'Create account' } },
+    {
+      path: '/verify-email',
+      component: EmailVerificationPage,
+      meta: { requiresAuth: true, title: 'Verify email' },
+    },
     { path: '/demo', component: DemoEntryPage, meta: { title: 'Starting local demo' } },
     {
       path: '/docs/api',
@@ -92,10 +98,19 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  if (to.meta.requiresAuth && !demoStore.state.isAuthenticated) {
-    return { path: '/login', query: { redirect: to.fullPath } }
+router.beforeEach(async (to) => {
+  if (to.meta.requiresAuth && !appStore.state.isAuthenticated) {
+    try {
+      const restored = await appStore.restoreSession()
+      if (!restored) return { path: '/login', query: { redirect: to.fullPath } }
+    } catch {
+      return { path: '/login', query: { unavailable: '1', redirect: to.fullPath } }
+    }
   }
+  if (to.meta.requiresAuth && !appStore.state.user.emailVerified && to.path !== '/verify-email') {
+    return '/verify-email'
+  }
+  if (to.path === '/verify-email' && appStore.state.user.emailVerified) return '/app/dashboard'
   return true
 })
 

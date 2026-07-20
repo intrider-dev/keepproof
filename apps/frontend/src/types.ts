@@ -1,4 +1,4 @@
-export type PurchaseStatus = 'active' | 'draft' | 'needs_review'
+export type PurchaseStatus = 'active' | 'archived' | 'draft' | 'needs_review'
 export type DeadlineType = 'return' | 'warranty'
 export type DeadlineUrgency = 'soon' | 'upcoming' | 'later' | 'past'
 
@@ -42,6 +42,7 @@ export type ExtractionFieldKey =
   | 'purchaseDate'
   | 'orderNumber'
   | 'currency'
+  | 'country'
   | 'total'
   | 'itemName'
   | 'returnPeriod'

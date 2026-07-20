@@ -29,8 +29,11 @@ describe('purchase and privacy validation', () => {
         merchant: 'North & Pine',
         purchaseDate: '2026-07-20',
         currency: 'USD',
+        country: 'US',
         total: '89.00',
         itemName: 'Kettle',
+        returnPeriod: '30 days',
+        warrantyPeriod: '12 months',
       }),
     ).toEqual({})
 
@@ -39,15 +42,21 @@ describe('purchase and privacy validation', () => {
         merchant: '',
         purchaseDate: '20/07/2026',
         currency: '$',
+        country: '',
         total: '-1',
         itemName: '',
+        returnPeriod: '0',
+        warrantyPeriod: '',
       }),
     ).toMatchObject({
       merchant: 'Merchant is required.',
       purchaseDate: 'Use a valid purchase date.',
       currency: 'Use a three-letter currency code.',
+      country: 'Country or region is required.',
       total: 'Enter a valid non-negative total.',
       itemName: 'Add at least one item.',
+      returnPeriod: 'Enter a positive return period.',
+      warrantyPeriod: 'Enter a positive warranty period.',
     })
   })
 

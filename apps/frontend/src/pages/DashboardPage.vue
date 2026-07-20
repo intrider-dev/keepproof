@@ -4,12 +4,12 @@ import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 import { deadlineDistance, formatDate, formatMoney } from '../lib/format'
 import type { Deadline } from '../types'
 
 const allDeadlines = computed(() =>
-  demoStore.state.purchases
+  appStore.state.purchases
     .flatMap((purchase) => [purchase.returnDeadline, purchase.warrantyDeadline])
     .filter((deadline): deadline is Deadline => Boolean(deadline))
     .filter((deadline) => deadline.daysLeft >= 0)
@@ -17,7 +17,7 @@ const allDeadlines = computed(() =>
 )
 
 const nextPurchase = computed(() =>
-  demoStore.state.purchases.find(
+  appStore.state.purchases.find(
     (purchase) => purchase.returnDeadline?.id === allDeadlines.value[0]?.id,
   ),
 )
@@ -27,7 +27,7 @@ const nextPurchase = computed(() =>
   <div class="page-stack">
     <PageHeader
       eyebrow="Monday, July 20"
-      :title="`Good morning, ${demoStore.state.user.name.split(' ')[0]}.`"
+      :title="`Good morning, ${appStore.state.user.name.split(' ')[0]}.`"
       description="Here is what needs attention across your household."
     />
 
@@ -63,7 +63,7 @@ const nextPurchase = computed(() =>
       <article>
         <span class="metric-icon"><AppIcon name="shield" /></span>
         <div>
-          <strong>{{ demoStore.activePurchases.value.length }}</strong
+          <strong>{{ appStore.activePurchases.value.length }}</strong
           ><span>Active warranties</span>
         </div>
         <small>All documents stored</small>
@@ -71,12 +71,12 @@ const nextPurchase = computed(() =>
       <article>
         <span class="metric-icon metric-icon--blue"><AppIcon name="spark" /></span>
         <div>
-          <strong>{{ demoStore.reviewDocuments.value.length }}</strong
+          <strong>{{ appStore.reviewDocuments.value.length }}</strong
           ><span>Needs your review</span>
         </div>
         <RouterLink
-          v-if="demoStore.reviewDocuments.value[0]"
-          :to="`/app/review/${demoStore.reviewDocuments.value[0].id}`"
+          v-if="appStore.reviewDocuments.value[0]"
+          :to="`/app/review/${appStore.reviewDocuments.value[0].id}`"
         >
           Review now <AppIcon name="arrow" :size="15" />
         </RouterLink>
@@ -160,7 +160,7 @@ const nextPurchase = computed(() =>
       </div>
       <div class="purchase-strip">
         <RouterLink
-          v-for="purchase in demoStore.state.purchases.slice(0, 3)"
+          v-for="purchase in appStore.state.purchases.slice(0, 3)"
           :key="purchase.id"
           class="purchase-mini"
           :to="

@@ -177,6 +177,15 @@ export const documentFixtures: ReceiptDocument[] = [
         errors: [],
       },
       {
+        key: 'country',
+        label: 'Country or region',
+        value: 'US',
+        normalizedValue: 'US',
+        confidence: 0.7,
+        source: 'Demo default',
+        errors: ['Confirm the country or region where the purchase was made.'],
+      },
+      {
         key: 'total',
         label: 'Total',
         value: '139.50',

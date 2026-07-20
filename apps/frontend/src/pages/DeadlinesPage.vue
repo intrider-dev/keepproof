@@ -5,7 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { demoStore } from '../demo/store'
+import { appStore } from '../stores/app'
 import { deadlineDistance, formatDate } from '../lib/format'
 import type { Deadline, Purchase } from '../types'
 
@@ -16,7 +16,7 @@ interface DeadlineRow {
 
 const filter = ref<'all' | 'return' | 'warranty'>('all')
 const rows = computed<DeadlineRow[]>(() =>
-  demoStore.state.purchases
+  appStore.state.purchases
     .flatMap((purchase) =>
       [purchase.returnDeadline, purchase.warrantyDeadline]
         .filter((deadline): deadline is Deadline => Boolean(deadline))
