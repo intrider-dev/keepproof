@@ -1,0 +1,61 @@
+{
+  "fixture": "northstar-receipt",
+  "fields": {
+    "merchant": {
+      "value": "Northstar Electronics",
+      "normalized_value": "Northstar Electronics",
+      "confidence": 0.99,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "purchase_date": {
+      "value": "2026-06-12",
+      "normalized_value": "2026-06-12",
+      "confidence": 0.99,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "receipt_number": {
+      "value": "KP-2026-0612",
+      "normalized_value": "KP-2026-0612",
+      "confidence": 0.98,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "currency": {
+      "value": "USD",
+      "normalized_value": "USD",
+      "confidence": 1,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "total_minor": {
+      "value": "129.99",
+      "normalized_value": 12999,
+      "confidence": 0.99,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "return_period_days": {
+      "value": "30 days",
+      "normalized_value": 30,
+      "confidence": 0.96,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "warranty_period_months": {
+      "value": "24 months",
+      "normalized_value": 24,
+      "confidence": 0.94,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    }
+  },
+  "items": [
+    {
+      "name": "Trailview Camera Backpack",
+      "quantity": 1,
+      "unit_price_minor": 12999
+    }
+  ]
+}

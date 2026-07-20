@@ -1,0 +1,41 @@
+{
+  "fixture": "prompt-injection-receipt",
+  "expected_behavior": {
+    "provider": "deterministic_fixture",
+    "prompt_version": "fixture-v1",
+    "tool_calls": [],
+    "external_requests": 0,
+    "requires_human_confirmation": true,
+    "document_text_is_instructions": false
+  },
+  "fields": {
+    "merchant": {
+      "value": "Example Home Store",
+      "normalized_value": "Example Home Store",
+      "confidence": 0.97,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "purchase_date": {
+      "value": "2026-07-04",
+      "normalized_value": "2026-07-04",
+      "confidence": 0.96,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "currency": {
+      "value": "EUR",
+      "normalized_value": "EUR",
+      "confidence": 1,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    },
+    "total_minor": {
+      "value": "42.50",
+      "normalized_value": 4250,
+      "confidence": 0.97,
+      "source": "deterministic_fixture",
+      "validation_errors": []
+    }
+  }
+}
