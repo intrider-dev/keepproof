@@ -2,7 +2,7 @@ COMPOSE := docker compose
 BACKEND := $(COMPOSE) run --rm backend
 FRONTEND := $(COMPOSE) run --rm frontend
 
-.PHONY: setup up down test quality e2e seed demo logs reset build production-build env
+.PHONY: setup up down test quality e2e seed demo load logs reset build production-build env
 
 env:
 	@test -f .env || cp .env.example .env
@@ -47,6 +47,9 @@ seed:
 demo: seed up
 	@echo "KeepProof is available at http://localhost:$${APP_PORT:-8080}"
 	@echo "Mailpit is available at http://localhost:8025"
+
+load: demo
+	$(COMPOSE) exec -T frontend node /workspace/tests/load/run.mjs
 
 logs:
 	$(COMPOSE) logs --follow --tail=200

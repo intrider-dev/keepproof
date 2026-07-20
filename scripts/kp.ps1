@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'up', 'down', 'test', 'quality', 'e2e', 'seed', 'demo', 'logs', 'build', 'production-build', 'reset')]
+    [ValidateSet('setup', 'up', 'down', 'test', 'quality', 'e2e', 'seed', 'demo', 'load', 'logs', 'build', 'production-build', 'reset')]
     [string] $Task = 'up'
 )
 
@@ -88,6 +88,14 @@ switch ($Task) {
         $AppPort = if ([string]::IsNullOrWhiteSpace($env:APP_PORT)) { '8080' } else { $env:APP_PORT }
         Write-Output "KeepProof: http://localhost:$AppPort"
         Write-Output 'Mailpit: http://localhost:8025'
+    }
+    'load' {
+        Initialize-EnvironmentFiles
+        Invoke-Compose up --detach --wait
+        Invoke-Compose run --rm backend php artisan migrate --force
+        Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
+        Invoke-Compose run --rm backend php artisan db:seed --force
+        Invoke-Compose exec -T frontend node /workspace/tests/load/run.mjs
     }
     'logs' { Invoke-Compose logs --follow --tail=200 }
     'build' { Invoke-Compose build }
