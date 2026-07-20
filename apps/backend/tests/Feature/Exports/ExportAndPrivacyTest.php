@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Exports;
 
+use App\Modules\Accounts\Actions\DeleteAccount;
 use App\Modules\Accounts\Actions\ExportAccountData;
 use App\Modules\Accounts\Models\User;
 use App\Modules\Exports\Actions\ExportClaimPackage;
@@ -11,10 +12,15 @@ use App\Modules\Households\Enums\HouseholdRole;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Models\HouseholdMember;
 use App\Modules\Purchases\Models\Purchase;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
+use Mockery\CompositeExpectation;
+use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -152,6 +158,82 @@ final class ExportAndPrivacyTest extends TestCase
             'subject_id' => $owner->id,
             'actor_user_id' => null,
         ]);
+    }
+
+    public function test_account_deletion_can_be_retried_after_a_partial_object_storage_failure(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $keys = [];
+        foreach (['first.jpg', 'second.jpg'] as $index => $filename) {
+            $response = $this->actingAs($owner)
+                ->withHeader('Idempotency-Key', 'partial-delete-upload-'.($index + 1))
+                ->post('/api/v1/households/'.$household->id.'/receipts', [
+                    'receipt' => UploadedFile::fake()->image($filename, 60, 60),
+                ])
+                ->assertAccepted();
+            $documentId = $response->json('data.id');
+            self::assertIsString($documentId);
+            $key = $household->documents()->whereKey($documentId)->value('storage_key');
+            self::assertIsString($key);
+            $keys[] = $key;
+        }
+
+        $remainingObjects = array_fill_keys($keys, true);
+        $attempt = 0;
+        $disk = Mockery::mock(Filesystem::class);
+        $deleteExpectation = $disk->shouldReceive('delete');
+        self::assertInstanceOf(CompositeExpectation::class, $deleteExpectation);
+        $deleteExpectation->__call('twice', []);
+        $deleteExpectation->__call('andReturnUsing', [
+            function (array $requestedKeys) use (&$attempt, &$remainingObjects): bool {
+                foreach ($requestedKeys as $key) {
+                    if (! is_string($key)) {
+                        throw new \LogicException('The deletion test accepts string storage keys only.');
+                    }
+                }
+
+                $attempt++;
+                if ($attempt === 1) {
+                    $firstKey = $requestedKeys[0] ?? null;
+                    if (! is_string($firstKey)) {
+                        throw new \LogicException('The deletion test requires at least one storage key.');
+                    }
+                    unset($remainingObjects[$firstKey]);
+
+                    return false;
+                }
+
+                foreach ($requestedKeys as $key) {
+                    unset($remainingObjects[$key]);
+                }
+
+                return true;
+            },
+        ]);
+        Storage::shouldReceive('disk')->twice()->with('receipts')->andReturn($disk);
+
+        try {
+            app(DeleteAccount::class)->execute($owner);
+            self::fail('The first deletion attempt must stop while storage is unavailable.');
+        } catch (RuntimeException $exception) {
+            self::assertSame(
+                'Account deletion stopped because receipt storage is unavailable.',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertCount(1, $remainingObjects);
+        $this->assertDatabaseHas('users', ['id' => $owner->id]);
+        $this->assertDatabaseCount('receipt_documents', 2);
+        self::assertSame(0, DB::table('audit_logs')->where('action', 'account.deleted')->count());
+
+        app(DeleteAccount::class)->execute($owner->refresh());
+
+        self::assertSame([], $remainingObjects);
+        $this->assertDatabaseMissing('users', ['id' => $owner->id]);
+        $this->assertDatabaseMissing('households', ['id' => $household->id]);
+        $this->assertDatabaseCount('receipt_documents', 0);
+        self::assertSame(1, DB::table('audit_logs')->where('action', 'account.deleted')->count());
     }
 
     public function test_account_deletion_is_blocked_while_an_owned_household_has_other_members(): void

@@ -14,10 +14,15 @@ use App\Modules\Notifications\Enums\ReminderStatus;
 use App\Modules\Notifications\Jobs\SendReminder;
 use App\Modules\Notifications\Models\Reminder;
 use App\Modules\Notifications\Notifications\DeadlineReminderNotification;
+use Illuminate\Contracts\Notifications\Dispatcher as NotificationDispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
+use Mockery\CompositeExpectation;
+use Ramsey\Uuid\Uuid;
 use Tests\TestCase;
 
 final class ReminderWorkflowTest extends TestCase
@@ -146,6 +151,110 @@ final class ReminderWorkflowTest extends TestCase
         Notification::assertSentToTimes($owner, DeadlineReminderNotification::class, 1);
         self::assertSame(ReminderStatus::Sent, $reminder->refresh()->status);
         self::assertSame(1, $reminder->attempts);
+    }
+
+    public function test_in_app_retry_reconciles_a_persisted_notification_without_sending_a_duplicate(): void
+    {
+        Notification::fake();
+        [$owner, $household] = $this->householdWithOwner();
+        $this->createPurchase($owner, $household);
+        $reminder = Reminder::query()->where('channel', ReminderChannel::InApp)->firstOrFail();
+        $notificationId = Uuid::uuid5(
+            Uuid::NAMESPACE_URL,
+            'https://keepproof.local/reminders/'.$reminder->id,
+        )->toString();
+        DB::table('notifications')->insert([
+            'id' => $notificationId,
+            'type' => DeadlineReminderNotification::class,
+            'notifiable_type' => $owner->getMorphClass(),
+            'notifiable_id' => $owner->id,
+            'data' => '{}',
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $reminder->update([
+            'status' => ReminderStatus::Failed,
+            'remind_at' => now()->subMinute(),
+            'attempts' => 1,
+        ]);
+
+        (new SendReminder($reminder->id))->handle();
+
+        Notification::assertNothingSent();
+        self::assertSame(ReminderStatus::Sent, $reminder->refresh()->status);
+        self::assertSame(1, $reminder->attempts);
+        $this->assertDatabaseCount('notifications', 1);
+    }
+
+    public function test_ambiguous_email_failure_is_terminal_and_is_not_automatically_resent(): void
+    {
+        [$owner, $household] = $this->householdWithOwner();
+        $this->createPurchase($owner, $household);
+        $reminder = Reminder::query()->where('channel', ReminderChannel::Email)->firstOrFail();
+        $reminder->update(['remind_at' => now()->subMinute()]);
+        $dispatcher = Mockery::mock(NotificationDispatcher::class);
+        $expectation = $dispatcher->shouldReceive('send');
+        self::assertInstanceOf(CompositeExpectation::class, $expectation);
+        $expectation->__call('once', []);
+        $expectation->__call('andThrow', [new \RuntimeException('Synthetic disconnect after SMTP DATA.')]);
+        $this->app->instance(NotificationDispatcher::class, $dispatcher);
+        $job = new SendReminder($reminder->id);
+
+        $job->handle();
+        $job->handle();
+        $job->failed(new \RuntimeException('Synthetic queue callback.'));
+
+        self::assertSame(ReminderStatus::DeliveryUnknown, $reminder->refresh()->status);
+        self::assertSame('email_delivery_unknown', $reminder->last_error_code);
+        self::assertSame(1, $reminder->attempts);
+    }
+
+    public function test_dispatch_reconciles_interrupted_email_as_unknown_and_retries_in_app_once(): void
+    {
+        Queue::fake();
+        [$owner, $household] = $this->householdWithOwner();
+        $this->createPurchase($owner, $household);
+        $email = Reminder::query()->where('channel', ReminderChannel::Email)->firstOrFail();
+        $inApp = Reminder::query()->where('channel', ReminderChannel::InApp)->firstOrFail();
+        foreach ([$email, $inApp] as $reminder) {
+            $reminder->update([
+                'status' => ReminderStatus::Sending,
+                'remind_at' => now()->subMinute(),
+                'attempts' => 1,
+            ]);
+            DB::table('reminders')->where('id', $reminder->id)->update([
+                'updated_at' => now()->subMinutes(2),
+            ]);
+        }
+
+        app(DispatchDueReminders::class)->execute();
+
+        self::assertSame(ReminderStatus::DeliveryUnknown, $email->refresh()->status);
+        self::assertSame('email_delivery_unknown_after_interruption', $email->last_error_code);
+        self::assertSame(ReminderStatus::Failed, $inApp->refresh()->status);
+        self::assertSame('in_app_delivery_interrupted', $inApp->last_error_code);
+        Queue::assertPushed(
+            SendReminder::class,
+            static fn (SendReminder $job): bool => $job->reminderId === $inApp->id,
+        );
+        Queue::assertNotPushed(
+            SendReminder::class,
+            static fn (SendReminder $job): bool => $job->reminderId === $email->id,
+        );
+    }
+
+    public function test_failed_callback_preserves_unknown_state_for_an_interrupted_email(): void
+    {
+        [$owner, $household] = $this->householdWithOwner();
+        $this->createPurchase($owner, $household);
+        $reminder = Reminder::query()->where('channel', ReminderChannel::Email)->firstOrFail();
+        $reminder->update(['status' => ReminderStatus::Sending]);
+
+        (new SendReminder($reminder->id))->failed(new \RuntimeException('Synthetic worker timeout.'));
+
+        self::assertSame(ReminderStatus::DeliveryUnknown, $reminder->refresh()->status);
+        self::assertSame('email_delivery_unknown_after_interruption', $reminder->last_error_code);
     }
 
     public function test_exhausted_delivery_is_explicitly_failed_without_an_infinite_retry_state(): void

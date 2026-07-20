@@ -65,7 +65,18 @@ final class SchedulePurchaseReminders
                 ]));
                 $desiredKeys[] = $deduplicationKey;
                 $existing = Reminder::query()->where('deduplication_key', $deduplicationKey)->first();
-                if ($existing?->status === ReminderStatus::Sent) {
+                if ($existing?->status === ReminderStatus::Sending && $channel === ReminderChannel::Email) {
+                    $existing->update([
+                        'status' => ReminderStatus::DeliveryUnknown,
+                        'last_error_code' => 'email_delivery_unknown_after_interruption',
+                    ]);
+
+                    continue;
+                }
+                if (in_array($existing?->status, [
+                    ReminderStatus::Sent,
+                    ReminderStatus::DeliveryUnknown,
+                ], true)) {
                     continue;
                 }
 

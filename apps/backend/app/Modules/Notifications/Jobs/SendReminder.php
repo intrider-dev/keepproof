@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Notifications\Jobs;
 
+use App\Modules\Notifications\Enums\ReminderChannel;
 use App\Modules\Notifications\Enums\ReminderStatus;
 use App\Modules\Notifications\Models\Reminder;
 use App\Modules\Notifications\Notifications\DeadlineReminderNotification;
@@ -14,6 +15,8 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Ramsey\Uuid\Uuid;
 use Throwable;
 
 final class SendReminder implements ShouldQueue
@@ -47,11 +50,23 @@ final class SendReminder implements ShouldQueue
             $locked = Reminder::query()->lockForUpdate()->find($this->reminderId);
             if ($locked === null || in_array($locked->status, [
                 ReminderStatus::Sent,
+                ReminderStatus::DeliveryUnknown,
                 ReminderStatus::Cancelled,
             ], true)) {
                 return null;
             }
             if ($locked->remind_at->isFuture()) {
+                return null;
+            }
+
+            if ($locked->channel === ReminderChannel::InApp
+                && DB::table('notifications')->where('id', $this->notificationId())->exists()) {
+                $locked->update([
+                    'status' => ReminderStatus::Sent,
+                    'sent_at' => $locked->sent_at ?? now(),
+                    'last_error_code' => null,
+                ]);
+
                 return null;
             }
 
@@ -68,13 +83,28 @@ final class SendReminder implements ShouldQueue
         }
 
         try {
-            $reminder->user->notify(new DeadlineReminderNotification($reminder->deadline, $reminder->channel));
+            $notification = new DeadlineReminderNotification($reminder->deadline, $reminder->channel);
+            $notification->id = $this->notificationId();
+            $reminder->user->notify($notification);
             $reminder->update([
                 'status' => ReminderStatus::Sent,
                 'sent_at' => now(),
                 'last_error_code' => null,
             ]);
         } catch (Throwable $exception) {
+            if ($reminder->channel === ReminderChannel::Email) {
+                $reminder->update([
+                    'status' => ReminderStatus::DeliveryUnknown,
+                    'last_error_code' => 'email_delivery_unknown',
+                ]);
+                Log::warning('reminder.email_delivery_unknown', [
+                    'reminder_id' => $reminder->id,
+                    'exception' => $exception::class,
+                ]);
+
+                return;
+            }
+
             $reminder->update([
                 'status' => ReminderStatus::Failed,
                 'last_error_code' => 'notification_delivery_failed',
@@ -86,9 +116,28 @@ final class SendReminder implements ShouldQueue
 
     public function failed(?Throwable $exception): void
     {
-        Reminder::query()->whereKey($this->reminderId)->update([
+        $reminder = Reminder::query()->find($this->reminderId);
+        if ($reminder === null || $reminder->status === ReminderStatus::DeliveryUnknown) {
+            return;
+        }
+        if ($reminder->channel === ReminderChannel::Email && $reminder->status === ReminderStatus::Sending) {
+            $reminder->update([
+                'status' => ReminderStatus::DeliveryUnknown,
+                'last_error_code' => 'email_delivery_unknown_after_interruption',
+            ]);
+
+            return;
+        }
+
+        $reminder->update([
             'status' => ReminderStatus::Failed,
             'last_error_code' => 'notification_delivery_exhausted',
         ]);
+    }
+
+    private function notificationId(): string
+    {
+        return Uuid::uuid5(Uuid::NAMESPACE_URL, 'https://keepproof.local/reminders/'.$this->reminderId)
+            ->toString();
     }
 }
