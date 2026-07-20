@@ -1,6 +1,7 @@
 # KeepProof Threat Model
 
-Status: living design document for the pre-release application  
+Status: living design document for the pre-release application
+
 Last reviewed: 2026-07-20
 
 This model covers the KeepProof modular monolith, Vue SPA, workers, scheduler, PostgreSQL, Redis, private S3-compatible storage, local OCR, email delivery, and the optional external extraction-provider boundary. It does not claim that a particular public deployment has been penetration-tested.
@@ -70,7 +71,7 @@ Every arrow crossing from the browser, a document, email, storage, OCR, or an op
 | Path traversal or public object exposure | Server-generated opaque storage keys, private bucket, authorized short-lived URLs, attachment response headers | Storage adapter and authorization tests | S3 bucket policy, IAM, URL expiry, access logging, and lifecycle rules must be tested against the chosen provider |
 | OCR command injection | Process arguments remain code-owned; document paths/content are data; time and resource limits; no shell interpretation | OCR adapter contract and hostile-fixture tests | Native parser vulnerabilities remain possible; isolate OCR workers in a real deployment |
 | Prompt injection or untrusted model output | Receipt text is data only; no tool execution; strict schema; provider limits; opt-in external processing; human confirmation before activation | Prompt-injection fixture, extractor contract tests, confirmation workflow tests | A provider may retain data according to its terms; operator must select and document a compliant provider |
-| Queue replay, concurrent extraction, duplicate reminders | Explicit state transitions, job uniqueness/locking, idempotency records, bounded attempts/backoff, durable deduplication keys | State-machine, retry, and notification-deduplication tests | Redis loss delays work; operational monitoring and dead-letter review are deployment responsibilities |
+| Queue replay, concurrent extraction, duplicate reminders | Explicit state transitions, job uniqueness/locking, idempotency records, deterministic in-app notification UUIDs, bounded attempts, durable deduplication keys, and a terminal `delivery_unknown` email state | State-machine, persisted-notification reconciliation, interrupted-worker, retry, and SMTP-ambiguity tests | SMTP can accept a message before a disconnect; such outcomes require operator review and are never automatically resent |
 | Export or deletion abuse | Recent password confirmation, authorization, transaction boundaries, audit events, asynchronous cleanup with retry | Export/deletion feature tests and audit assertions | Object-store deletion can be eventually consistent; versioned buckets need a documented purge policy |
 | Stored XSS through notes or OCR text | Vue text rendering and JSON serialization; no trusted HTML input; CSP at production proxy | Frontend rendering tests, CSP configuration, CodeQL | CSP must be validated at the TLS ingress; future rich-text features require a dedicated sanitizer |
 | SQL/command injection | Eloquent/query-builder parameterization; allowlisted sort/filter fields; code-owned process arguments | Static analysis, focused validation tests, code review | Raw expressions and new process calls require explicit review |
@@ -89,10 +90,10 @@ KeepProof intentionally has no advertising trackers or hidden analytics. A deplo
 ## Availability and failure behavior
 
 - PostgreSQL unavailable: readiness fails and state-changing requests fail closed; no business state is accepted only in Redis.
-- Redis unavailable: cached reads may degrade and queued work/reminders pause; requests must not report an asynchronous operation as durably queued unless the dispatch boundary succeeded.
+- Redis unavailable: cached reads may degrade and queued work/reminders pause. Receipt uploads remain durable as pending PostgreSQL work, expose a delayed state, and are redispatched by the reconciliation command after Redis recovers.
 - Object storage unavailable: uploads and downloads fail with a retriable user-facing error; metadata must not claim a file is usable.
 - OCR unavailable: the document reaches a bounded failed state and can be retried; manual entry remains available.
-- Mail unavailable: in-app state remains authoritative and mail retries are bounded; deduplication prevents a later retry from sending the same reminder twice.
+- Mail unavailable: in-app state remains authoritative. Any email exception after delivery starts is conservatively recorded as `delivery_unknown` and is not automatically resent; interrupted in-app delivery is safely retried through its deterministic notification identifier.
 - External AI unavailable or invalid: no fallback silently sends data elsewhere; local/manual processing continues.
 
 ## Explicit non-goals for the MVP
