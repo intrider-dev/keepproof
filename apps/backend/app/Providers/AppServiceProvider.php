@@ -5,6 +5,14 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Modules\Accounts\Models\User;
+use App\Modules\Documents\Contracts\DocumentTextExtractor;
+use App\Modules\Documents\Contracts\ReceiptDataExtractor;
+use App\Modules\Documents\Extraction\DeterministicFixtureExtractor;
+use App\Modules\Documents\Extraction\ManualEntryFallback;
+use App\Modules\Documents\Extraction\ReceiptPatternExtractor;
+use App\Modules\Documents\Extraction\TesseractDocumentTextExtractor;
+use App\Modules\Documents\Models\ReceiptDocument;
+use App\Modules\Documents\Policies\ReceiptDocumentPolicy;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Policies\HouseholdPolicy;
 use App\Modules\Purchases\Models\Purchase;
@@ -33,6 +41,21 @@ class AppServiceProvider extends ServiceProvider
             ->mixedCase()
             ->numbers()
             ->symbols());
+
+        $this->app->bind(DocumentTextExtractor::class, function (): DocumentTextExtractor {
+            return match (config('receipt_processing.ocr_driver')) {
+                'fixture' => new DeterministicFixtureExtractor,
+                'tesseract' => new TesseractDocumentTextExtractor,
+                default => throw new \LogicException('OCR_DRIVER must be fixture or tesseract.'),
+            };
+        });
+        $this->app->bind(ReceiptDataExtractor::class, function (): ReceiptDataExtractor {
+            return match (config('receipt_processing.data_extractor')) {
+                'patterns' => new ReceiptPatternExtractor,
+                'manual' => new ManualEntryFallback,
+                default => throw new \LogicException('RECEIPT_DATA_EXTRACTOR must be patterns or manual.'),
+            };
+        });
     }
 
     /**
@@ -42,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(Household::class, HouseholdPolicy::class);
         Gate::policy(Purchase::class, PurchasePolicy::class);
+        Gate::policy(ReceiptDocument::class, ReceiptDocumentPolicy::class);
 
         Route::bind('household', static function (string $value): Household {
             $user = request()->user();
@@ -69,6 +93,16 @@ class AppServiceProvider extends ServiceProvider
                 ->whereKey($value)
                 ->whereIn('household_id', $user->households()->select('households.id'))
                 ->firstOrFail();
+        });
+
+        Route::bind('document', static function (string $value): ReceiptDocument {
+            $household = request()->route('household');
+
+            if ($household instanceof Household) {
+                return $household->documents()->whereKey($value)->firstOrFail();
+            }
+
+            throw (new ModelNotFoundException)->setModel(ReceiptDocument::class, [$value]);
         });
 
         RateLimiter::for('auth.login', static fn (Request $request): Limit => Limit::perMinute(5)->by(

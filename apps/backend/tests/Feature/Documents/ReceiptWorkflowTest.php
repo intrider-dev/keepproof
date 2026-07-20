@@ -1,0 +1,327 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Documents;
+
+use App\Modules\Accounts\Models\User;
+use App\Modules\Documents\Actions\TransitionDocumentState;
+use App\Modules\Documents\Actions\ValidateReceiptContent;
+use App\Modules\Documents\Contracts\DocumentTextExtractor;
+use App\Modules\Documents\Contracts\ReceiptDataExtractor;
+use App\Modules\Documents\Data\ExtractedDocumentText;
+use App\Modules\Documents\Enums\DocumentState;
+use App\Modules\Documents\Exceptions\InvalidDocumentTransition;
+use App\Modules\Documents\Exceptions\TransientDocumentFailure;
+use App\Modules\Documents\Extraction\DeterministicFixtureExtractor;
+use App\Modules\Documents\Jobs\ProcessReceipt;
+use App\Modules\Documents\Models\ReceiptDocument;
+use App\Modules\Households\Enums\HouseholdRole;
+use App\Modules\Households\Models\Household;
+use App\Modules\Households\Models\HouseholdMember;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+final class ReceiptWorkflowTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake('receipts');
+        Queue::fake();
+        config()->set('receipt_processing.disk', 'receipts');
+        config()->set('receipt_processing.ocr_driver', 'fixture');
+        config()->set('receipt_processing.data_extractor', 'patterns');
+    }
+
+    public function test_upload_sanitizes_filename_uses_an_opaque_private_key_and_is_idempotent(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $first = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0001')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->image('../../family receipt.JPG', 120, 80),
+            ]);
+
+        $first->assertAccepted()
+            ->assertJsonPath('data.state', 'validation_pending')
+            ->assertJsonPath('data.filename', 'family receipt.jpg')
+            ->assertJsonMissingPath('data.storage_key')
+            ->assertJsonMissingPath('data.raw_ocr_text');
+        $documentId = $first->json('data.id');
+        self::assertIsString($documentId);
+        $document = ReceiptDocument::query()->findOrFail($documentId);
+
+        self::assertStringStartsWith(
+            'households/'.$household->id.'/receipts/'.$documentId.'/',
+            $document->storage_key,
+        );
+        self::assertStringNotContainsString('family', $document->storage_key);
+        self::assertStringNotContainsString('..', $document->storage_key);
+        Storage::disk('receipts')->assertExists($document->storage_key);
+        Queue::assertPushed(ProcessReceipt::class, 1);
+
+        $retry = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0001')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->image('different.png', 20, 20),
+            ]);
+
+        $retry->assertAccepted()->assertJsonPath('data.id', $documentId);
+        $this->assertDatabaseCount('receipt_documents', 1);
+        $this->assertDatabaseCount('purchases', 1);
+        Queue::assertPushed(ProcessReceipt::class, 1);
+    }
+
+    public function test_disguised_script_and_unsupported_svg_are_rejected_before_storage(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+
+        $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0002')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->createWithContent('receipt.jpg', '<?php system($_GET["x"]);'),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('receipt');
+
+        $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0003')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->createWithContent(
+                    'receipt.svg',
+                    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+                ),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('receipt');
+
+        $this->assertDatabaseCount('receipt_documents', 0);
+        self::assertSame([], Storage::disk('receipts')->allFiles());
+    }
+
+    public function test_processing_stores_encrypted_raw_text_and_review_fields_without_deadlines(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0004');
+
+        $this->process($document, new DeterministicFixtureExtractor);
+        $document->refresh()->load('fields');
+
+        self::assertSame(DocumentState::NeedsReview, $document->state);
+        self::assertSame('deterministic-fixture-v1', $document->ocr_provider);
+        self::assertSame('deterministic-patterns', $document->extraction_provider);
+        self::assertSame('receipt-patterns-v1', $document->prompt_version);
+        self::assertSame('Northstar Home', $document->fields->firstWhere('field_key', 'merchant')?->normalized_value);
+        self::assertSame('13950', $document->fields->firstWhere('field_key', 'total_minor')?->normalized_value);
+        $encrypted = DB::table('receipt_documents')->where('id', $document->id)->value('raw_ocr_text');
+        self::assertIsString($encrypted);
+        self::assertStringNotContainsString('Northstar Home', $encrypted);
+        $this->assertDatabaseMissing('purchase_deadlines', ['purchase_id' => $document->purchase_id]);
+        $this->assertDatabaseHas('document_state_transitions', [
+            'receipt_document_id' => $document->id,
+            'from_state' => 'processing',
+            'to_state' => 'needs_review',
+        ]);
+    }
+
+    public function test_confirmation_activates_deadlines_once_and_persists_confirmed_values_separately(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0005');
+        $this->process($document, new DeterministicFixtureExtractor);
+
+        $response = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'confirm-proof-0001')
+            ->putJson(
+                '/api/v1/households/'.$household->id.'/documents/'.$document->id.'/confirmation',
+                $this->confirmationPayload(),
+            );
+
+        $response->assertOk()
+            ->assertJsonPath('data.state', 'ready')
+            ->assertJsonPath('data.purchase.state', 'active')
+            ->assertJsonPath('data.purchase.merchant', 'Northstar Home')
+            ->assertJsonFragment(['kind' => 'return', 'due_on' => '2026-08-07'])
+            ->assertJsonFragment(['kind' => 'warranty', 'due_on' => '2027-07-08']);
+        $this->assertDatabaseHas('extraction_fields', [
+            'receipt_document_id' => $document->id,
+            'field_key' => 'merchant',
+            'raw_value' => 'Northstar Home',
+            'confirmed_value' => 'Northstar Home',
+        ]);
+        $this->assertDatabaseCount('purchase_deadlines', 2);
+
+        $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'confirm-proof-0001')
+            ->putJson(
+                '/api/v1/households/'.$household->id.'/documents/'.$document->id.'/confirmation',
+                $this->confirmationPayload(),
+            )
+            ->assertOk()
+            ->assertJsonPath('data.state', 'ready');
+        $this->assertDatabaseCount('purchase_deadlines', 2);
+        $this->assertSame(1, DB::table('audit_logs')->where('action', 'receipt.confirmed')->count());
+    }
+
+    public function test_transient_failure_moves_to_failed_and_a_later_run_recovers_idempotently(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0006');
+        $failing = new class implements DocumentTextExtractor
+        {
+            public function extract(string $binary, string $mimeType): ExtractedDocumentText
+            {
+                throw new TransientDocumentFailure('ocr_temporarily_unavailable');
+            }
+        };
+
+        try {
+            $this->process($document, $failing);
+            self::fail('The transient OCR failure should be rethrown for the queue retry policy.');
+        } catch (TransientDocumentFailure $exception) {
+            self::assertSame('ocr_temporarily_unavailable', $exception->failureCode);
+        }
+        self::assertSame(DocumentState::Failed, $document->refresh()->state);
+
+        $this->process($document, new DeterministicFixtureExtractor);
+        self::assertSame(DocumentState::NeedsReview, $document->refresh()->state);
+        self::assertSame(2, $document->processing_attempts);
+        $this->assertSame(1, DB::table('extraction_fields')
+            ->where('receipt_document_id', $document->id)
+            ->where('field_key', 'merchant')
+            ->count());
+    }
+
+    public function test_active_pdf_content_is_quarantined_without_retry(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $response = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-proof-0007')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->createWithContent(
+                    'unsafe.pdf',
+                    "%PDF-1.4\n1 0 obj << /OpenAction 2 0 R /JavaScript (alert) >>\nendobj\n%%EOF",
+                ),
+            ])
+            ->assertAccepted();
+        $documentId = $response->json('data.id');
+        self::assertIsString($documentId);
+        $document = ReceiptDocument::query()->findOrFail($documentId);
+
+        $this->process($document, new DeterministicFixtureExtractor);
+
+        self::assertSame(DocumentState::Quarantined, $document->refresh()->state);
+        self::assertSame('active_pdf_content', $document->last_error_code);
+        $this->assertDatabaseCount('extraction_fields', 0);
+    }
+
+    public function test_invalid_state_transition_is_rejected_and_logged_state_is_unchanged(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0008');
+
+        try {
+            app(TransitionDocumentState::class)->execute(
+                $document,
+                DocumentState::Ready,
+                'invalid_shortcut',
+                $document->correlation_id,
+            );
+            self::fail('An invalid state transition must fail.');
+        } catch (InvalidDocumentTransition) {
+            self::assertSame(DocumentState::ValidationPending, $document->refresh()->state);
+        }
+    }
+
+    public function test_document_binding_hides_another_households_receipt(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        [$intruder, $foreignHousehold] = $this->householdWithOwner('Intruder');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0009');
+
+        $this->actingAs($intruder)
+            ->getJson('/api/v1/households/'.$household->id.'/documents/'.$document->id)
+            ->assertNotFound();
+        $this->actingAs($intruder)
+            ->getJson('/api/v1/households/'.$foreignHousehold->id.'/documents/'.$document->id)
+            ->assertNotFound();
+    }
+
+    private function uploadImage(User $owner, Household $household, string $key): ReceiptDocument
+    {
+        $response = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', $key)
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->image('receipt.png', 100, 100),
+            ])
+            ->assertAccepted();
+        $documentId = $response->json('data.id');
+        self::assertIsString($documentId);
+
+        return ReceiptDocument::query()->findOrFail($documentId);
+    }
+
+    private function process(ReceiptDocument $document, DocumentTextExtractor $extractor): void
+    {
+        (new ProcessReceipt($document->id, $document->correlation_id))->handle(
+            app(TransitionDocumentState::class),
+            app(ValidateReceiptContent::class),
+            $extractor,
+            app(ReceiptDataExtractor::class),
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private function confirmationPayload(): array
+    {
+        return [
+            'merchant' => 'Northstar Home',
+            'purchase_date' => '2026-07-08',
+            'timezone' => 'America/New_York',
+            'receipt_number' => 'NS-1042',
+            'currency' => 'USD',
+            'total_minor' => 13950,
+            'country_region' => 'US',
+            'return_period_quantity' => 30,
+            'return_period_unit' => 'days',
+            'return_counting_convention' => 'purchase_day_exclusive',
+            'warranty_period_quantity' => 12,
+            'warranty_period_unit' => 'months',
+            'warranty_counting_convention' => 'purchase_day_exclusive',
+            'notes' => 'Synthetic fixture only.',
+            'items' => [[
+                'name' => 'Linen floor lamp',
+                'quantity' => 1,
+                'unit_price_minor' => 13950,
+                'serial_number' => null,
+            ]],
+        ];
+    }
+
+    /** @return array{User, Household} */
+    private function householdWithOwner(string $name): array
+    {
+        $owner = User::factory()->create(['name' => $name, 'timezone' => 'America/New_York']);
+        $household = Household::factory()->create([
+            'name' => $name.' household',
+            'owner_user_id' => $owner->id,
+            'is_personal' => true,
+        ]);
+        HouseholdMember::query()->create([
+            'household_id' => $household->id,
+            'user_id' => $owner->id,
+            'role' => HouseholdRole::Owner,
+            'joined_at' => now(),
+        ]);
+
+        return [$owner, $household];
+    }
+}

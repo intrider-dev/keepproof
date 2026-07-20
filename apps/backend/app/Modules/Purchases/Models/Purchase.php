@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchases\Models;
 
 use App\Modules\Accounts\Models\User;
+use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Households\Models\Household;
 use App\Modules\Purchases\Enums\PurchaseState;
 use Carbon\CarbonImmutable;
@@ -49,6 +50,7 @@ use KeepProof\DeadlineEngine\PeriodUnit;
  * @property-read User|null $creator
  * @property-read Collection<int, PurchaseItem> $items
  * @property-read Collection<int, PurchaseDeadline> $deadlines
+ * @property-read Collection<int, ReceiptDocument> $documents
  */
 final class Purchase extends Model
 {
@@ -105,6 +107,12 @@ final class Purchase extends Model
     public function deadlines(): HasMany
     {
         return $this->hasMany(PurchaseDeadline::class);
+    }
+
+    /** @return HasMany<ReceiptDocument, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ReceiptDocument::class);
     }
 
     protected static function newFactory(): PurchaseFactory

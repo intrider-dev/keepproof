@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Households\Models;
 
 use App\Modules\Accounts\Models\User;
+use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Purchases\Models\Purchase;
 use Database\Factories\HouseholdFactory;
 use Illuminate\Database\Eloquent\Collection;
@@ -28,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, User> $members
  * @property-read Collection<int, HouseholdMember> $memberships
  * @property-read Collection<int, Purchase> $purchases
+ * @property-read Collection<int, ReceiptDocument> $documents
  */
 final class Household extends Model
 {
@@ -69,6 +71,12 @@ final class Household extends Model
     public function purchases(): HasMany
     {
         return $this->hasMany(Purchase::class);
+    }
+
+    /** @return HasMany<ReceiptDocument, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ReceiptDocument::class);
     }
 
     protected static function newFactory(): HouseholdFactory

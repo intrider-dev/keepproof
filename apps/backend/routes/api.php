@@ -6,6 +6,7 @@ use App\Modules\Accounts\Http\Controllers\AuthenticationController;
 use App\Modules\Accounts\Http\Controllers\EmailVerificationController;
 use App\Modules\Accounts\Http\Controllers\PasswordController;
 use App\Modules\Accounts\Http\Controllers\ProfileController;
+use App\Modules\Documents\Http\Controllers\ReceiptDocumentController;
 use App\Modules\Households\Http\Controllers\HouseholdController;
 use App\Modules\Households\Http\Controllers\HouseholdInvitationController;
 use App\Modules\Households\Http\Controllers\HouseholdMemberController;
@@ -52,6 +53,15 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'show']);
             Route::put('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'update']);
             Route::delete('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'destroy']);
+
+            Route::post('/households/{household}/receipts', [ReceiptDocumentController::class, 'store'])
+                ->middleware('throttle:10,1');
+            Route::get('/households/{household}/documents/{document}', [ReceiptDocumentController::class, 'show']);
+            Route::post('/households/{household}/documents/{document}/download', [ReceiptDocumentController::class, 'download'])
+                ->middleware('throttle:30,1');
+            Route::put('/households/{household}/documents/{document}/confirmation', [ReceiptDocumentController::class, 'confirm']);
+            Route::post('/households/{household}/documents/{document}/retry', [ReceiptDocumentController::class, 'retry'])
+                ->middleware('throttle:6,1');
         });
     });
 });
