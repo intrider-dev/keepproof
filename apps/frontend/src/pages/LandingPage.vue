@@ -181,7 +181,10 @@ const route = useRoute()
     <footer class="marketing-footer">
       <RouterLink class="brand" to="/"><BrandMark /><span>KeepProof</span></RouterLink>
       <p>Private receipt, return-window, and warranty tracking.</p>
-      <span>Open-source · No advertising trackers</span>
+      <span
+        ><RouterLink to="/docs/api">API docs</RouterLink> · Open-source · No advertising
+        trackers</span
+      >
     </footer>
   </div>
 </template>

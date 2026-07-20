@@ -1,0 +1,6 @@
+extends:
+  - recommended
+
+rules:
+  # Health probes and the CSRF-cookie initializer have no truthful 4xx response.
+  operation-4xx-response: off

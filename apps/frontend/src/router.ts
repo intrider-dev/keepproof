@@ -26,6 +26,11 @@ const router = createRouter({
     { path: '/register', component: RegisterPage, meta: { title: 'Create account' } },
     { path: '/demo', component: DemoEntryPage, meta: { title: 'Starting local demo' } },
     {
+      path: '/docs/api',
+      component: () => import('./pages/ApiDocsPage.vue'),
+      meta: { title: 'API documentation' },
+    },
+    {
       path: '/app',
       component: AppShell,
       meta: { requiresAuth: true },

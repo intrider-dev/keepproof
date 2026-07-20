@@ -1,0 +1,1058 @@
+openapi: 3.1.0
+info:
+  title: KeepProof API
+  version: 0.1.0-rc.1
+  license:
+    name: MIT
+    identifier: MIT
+  summary: Private receipt, return-window, and warranty tracking API.
+  description: |
+    Versioned REST API for the KeepProof modular monolith. Browser clients use
+    Laravel Sanctum's stateful cookie flow: first request `/sanctum/csrf-cookie`,
+    then send credentials and the decoded `XSRF-TOKEN` value as `X-XSRF-TOKEN`
+    on unsafe requests. Extracted values never activate deadlines before human confirmation.
+servers:
+  - url: /
+    description: Current KeepProof origin
+security: []
+tags:
+  - name: Authentication
+    description: Stateful account, password, and email-verification operations.
+  - name: Account
+    description: Current-user profile, export, and erasure operations.
+  - name: Households
+    description: Tenant workspaces, membership, and invitations.
+  - name: Purchases
+    description: Purchase records, items, deadlines, search, and dashboard views.
+  - name: Receipts
+    description: Private receipt upload, extraction review, and file access.
+  - name: Notifications
+    description: Reminder preferences and in-app notifications.
+  - name: Exports
+    description: Portable calendar and claim-package downloads.
+  - name: Health
+    description: Process liveness and dependency readiness probes.
+paths:
+  /sanctum/csrf-cookie:
+    get:
+      tags: [Authentication]
+      operationId: initializeCsrf
+      summary: Initialize the stateful CSRF cookie.
+      responses:
+        "204":
+          description: CSRF cookie initialized.
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      operationId: registerAccount
+      summary: Register an account and create its personal household.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterAccount"
+      responses:
+        "201":
+          description: Account created; email verification is required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "422":
+          $ref: "#/components/responses/ValidationProblem"
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Start an authenticated browser session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "422":
+          $ref: "#/components/responses/ValidationProblem"
+        "429":
+          $ref: "#/components/responses/RateLimitProblem"
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: End the current authenticated session.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "204": { description: Session invalidated. }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Authentication]
+      operationId: requestPasswordReset
+      summary: Request a password-reset email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: "Generic accepted response, regardless of account existence." }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Authentication]
+      operationId: resetPassword
+      summary: Reset an account password using a valid token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, email, password, password_confirmation]
+              properties:
+                token: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 12 }
+                password_confirmation: { type: string, format: password }
+      responses:
+        "204": { description: Password reset. }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/auth/confirm-password:
+    post:
+      tags: [Authentication]
+      operationId: confirmPassword
+      summary: Reconfirm the current user's password.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Recent password confirmation window opened.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [confirmed_until]
+                properties:
+                  confirmed_until: { type: string, format: date-time }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/email/verification-notification:
+    post:
+      tags: [Authentication]
+      operationId: resendVerificationEmail
+      summary: Resend the email-verification link.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "202": { description: Verification email queued or already verified. }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+  /api/v1/email/verify/{id}/{hash}:
+    get:
+      tags: [Authentication]
+      operationId: verifyEmail
+      summary: Verify the signed-in user's email address.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: hash, in: path, required: true, schema: { type: string } }
+        - { name: expires, in: query, required: true, schema: { type: integer } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Email verified. }
+        "403": { $ref: "#/components/responses/AuthorizationProblem" }
+  /api/v1/me:
+    get:
+      tags: [Account]
+      operationId: getProfile
+      summary: Get the current user's profile.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+    patch:
+      tags: [Account]
+      operationId: updateProfile
+      summary: Update locale and timezone preferences.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 120 }
+                email: { type: string, format: email }
+                timezone: { type: string, examples: [America/New_York] }
+                locale: { type: string, enum: [en] }
+      responses:
+        "200":
+          description: Updated profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/account/export:
+    get:
+      tags: [Account, Exports]
+      operationId: exportAccount
+      summary: Download a ZIP with portable JSON and private receipt originals.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Account export archive.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/zip:
+              schema: { type: string, contentEncoding: binary }
+        "403": { $ref: "#/components/responses/RecentPasswordProblem" }
+  /api/v1/account:
+    delete:
+      tags: [Account]
+      operationId: deleteAccount
+      summary: Delete the account, owned households, and their private objects.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "204": { description: Account deleted. }
+        "403": { $ref: "#/components/responses/RecentPasswordProblem" }
+  /api/v1/households:
+    get:
+      tags: [Households]
+      operationId: listHouseholds
+      summary: List households available to the current user.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Paginated households visible to the current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseholdCollection"
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+  /api/v1/households/{household}:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    get:
+      tags: [Households]
+      operationId: getHousehold
+      summary: Get a tenant-scoped household.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Household details.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Household" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+    patch:
+      tags: [Households]
+      operationId: updateHousehold
+      summary: Update a household as its owner.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 120 }
+      responses:
+        "200": { description: Household updated. }
+        "403": { $ref: "#/components/responses/AuthorizationProblem" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/members:
+    get:
+      tags: [Households]
+      operationId: listHouseholdMembers
+      summary: List household members.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+      responses:
+        "200": { description: Household members. }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/members/{member}:
+    delete:
+      tags: [Households]
+      operationId: removeHouseholdMember
+      summary: Remove a member from a household.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - { name: member, in: path, required: true, schema: { $ref: "#/components/schemas/Ulid" } }
+      responses:
+        "204": { description: Member removed. }
+        "403": { $ref: "#/components/responses/AuthorizationProblem" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/invitations:
+    post:
+      tags: [Households]
+      operationId: inviteHouseholdMember
+      summary: Invite a person to a household by email.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                role: { type: string, enum: [member], default: member }
+      responses:
+        "201": { description: Invitation created and emailed. }
+        "403": { $ref: "#/components/responses/AuthorizationProblem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/invitations/{invitation}/accept:
+    post:
+      tags: [Households]
+      operationId: acceptHouseholdInvitation
+      summary: Accept a household invitation.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: invitation, in: path, required: true, schema: { $ref: "#/components/schemas/Ulid" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { description: Invitation accepted idempotently. }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/households/{household}/purchases:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+    get:
+      tags: [Purchases]
+      operationId: listPurchases
+      summary: Search and paginate purchases in a household.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 160 } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/PurchaseState" } }
+        - { name: merchant, in: query, schema: { type: string } }
+        - { name: date_from, in: query, schema: { type: string, format: date } }
+        - { name: date_to, in: query, schema: { type: string, format: date } }
+        - { name: deadline_before, in: query, schema: { type: string, format: date } }
+        - $ref: "#/components/parameters/PerPage"
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: Filtered, paginated purchases with items and deadlines eagerly loaded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseCollection" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+    post:
+      tags: [Purchases]
+      operationId: createPurchase
+      summary: Create a purchase with items and deadlines.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseInput" }
+      responses:
+        "201":
+          description: Manually entered purchase with active calculated deadlines.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/households/{household}/purchases/{purchase}:
+    parameters:
+      - $ref: "#/components/parameters/HouseholdId"
+      - $ref: "#/components/parameters/PurchaseId"
+    get:
+      tags: [Purchases]
+      operationId: getPurchase
+      summary: Get a tenant-scoped purchase.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Purchase details.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseResponse" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+    put:
+      tags: [Purchases]
+      operationId: replacePurchase
+      summary: Replace editable purchase details and recalculate deadlines.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseInput" }
+      responses:
+        "200":
+          description: Purchase and deadline schedule replaced transactionally.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+    delete:
+      tags: [Purchases]
+      operationId: deletePurchase
+      summary: Delete a purchase and its private data.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "204": { description: "Purchase, attached documents, deadlines, and reminders deleted." }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/receipts:
+    post:
+      tags: [Receipts]
+      operationId: uploadReceipt
+      summary: Sanitize and privately store a receipt, then queue processing.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [receipt]
+              properties:
+                receipt:
+                  type: string
+                  contentEncoding: binary
+                  description: Content-verified JPG, PNG, or PDF up to 10 MB.
+                purchase_id:
+                  oneOf:
+                    - $ref: "#/components/schemas/Ulid"
+                    - type: "null"
+      responses:
+        "202":
+          description: Private upload stored and validation queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceiptDocumentResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
+  /api/v1/households/{household}/documents/{document}:
+    get:
+      tags: [Receipts]
+      operationId: getReceiptDocument
+      summary: Get receipt processing state and extracted fields.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Processing state and review fields; storage keys and raw OCR text are never returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceiptDocumentResponse" }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/documents/{document}/confirmation:
+    put:
+      tags: [Receipts]
+      operationId: confirmExtraction
+      summary: Confirm corrected values and atomically activate calculated deadlines.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/DocumentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseInput" }
+      responses:
+        "200":
+          description: Human-confirmed document and active purchase.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceiptDocumentResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/households/{household}/documents/{document}/download:
+    post:
+      tags: [Receipts]
+      operationId: createReceiptDownloadUrl
+      summary: Create a short-lived signed URL for a private receipt.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Short-lived signed private-object URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [url, expires_at]
+                    properties:
+                      url: { type: string, format: uri }
+                      expires_at: { type: string, format: date-time }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/documents/{document}/retry:
+    post:
+      tags: [Receipts]
+      operationId: retryReceiptProcessing
+      summary: Retry a failed receipt-processing job.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "202": { description: Failed document safely queued again. }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/households/{household}/documents/{document}/original:
+    delete:
+      tags: [Receipts]
+      operationId: deleteReceiptOriginal
+      summary: Delete the original private object while retaining confirmed structured data.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200": { description: Original removed idempotently. }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/households/{household}/dashboard:
+    get:
+      tags: [Purchases]
+      operationId: getDashboard
+      summary: Get upcoming actions and documents requiring review.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+      responses:
+        "200":
+          description: Upcoming deadlines, review queue, and the current user's scheduled reminders.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/notification-preferences:
+    get:
+      tags: [Notifications]
+      operationId: getNotificationPreferences
+      summary: Get the current user's reminder preferences.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: Current reminder preferences.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreferencesResponse" }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+    put:
+      tags: [Notifications]
+      operationId: updateNotificationPreferences
+      summary: Replace the current user's reminder preferences.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreferencesInput" }
+      responses:
+        "200":
+          description: Preferences saved and future unsent reminders rebuilt.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPreferencesResponse" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listInAppNotifications
+      summary: List the current user's in-app notifications.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200": { description: Paginated in-app notifications for the current user. }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+  /api/v1/notifications/{notification}/read:
+    put:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      summary: Mark one in-app notification as read.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: notification, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Notification marked as read idempotently. }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/purchases/{purchase}/deadlines/{deadline}/calendar:
+    get:
+      tags: [Exports]
+      operationId: exportDeadlineCalendar
+      summary: Export a purchase deadline as an ICS event.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/PurchaseId"
+        - { name: deadline, in: path, required: true, schema: { $ref: "#/components/schemas/Ulid" } }
+      responses:
+        "200":
+          description: RFC 5545 calendar event.
+          content:
+            text/calendar:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /api/v1/households/{household}/purchases/{purchase}/claim-package:
+    get:
+      tags: [Exports]
+      operationId: exportClaimPackage
+      summary: Download a portable purchase claim package.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/HouseholdId"
+        - $ref: "#/components/parameters/PurchaseId"
+      responses:
+        "200":
+          description: ZIP with purchase JSON, confirmed extraction data, disclaimer, and originals.
+          content:
+            application/zip:
+              schema: { type: string, contentEncoding: binary }
+        "404": { $ref: "#/components/responses/NotFoundProblem" }
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: liveHealth
+      summary: Check whether the backend process is alive.
+      responses:
+        "200": { description: Process is alive. }
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: readinessHealth
+      summary: Check required infrastructure dependencies.
+      responses:
+        "200": { description: Required dependencies are reachable. }
+        "503": { description: At least one required dependency is unavailable. }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: laravel_session
+      description: Stateful Laravel Sanctum session. Unsafe requests also require X-XSRF-TOKEN.
+  parameters:
+    HouseholdId:
+      name: household
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Ulid" }
+    PurchaseId:
+      name: purchase
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Ulid" }
+    DocumentId:
+      name: document
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Ulid" }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable 8–200 character key reused only for the same logical operation.
+      schema: { type: string, minLength: 8, maxLength: 200, pattern: "^[A-Za-z0-9._:-]+$" }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+  responses:
+    AuthenticationProblem:
+      description: Authentication is required.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    AuthorizationProblem:
+      description: The action is not authorized.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    RecentPasswordProblem:
+      description: Recent password confirmation is required.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ProblemDetails"
+              - type: object
+                properties:
+                  code: { type: string, const: password_confirmation_required }
+    NotFoundProblem:
+      description: The resource is missing or hidden by tenant isolation.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    ValidationProblem:
+      description: Request validation failed.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ProblemDetails"
+              - type: object
+                required: [errors]
+                properties:
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { type: string }
+    RateLimitProblem:
+      description: Rate limit exceeded.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+  schemas:
+    Ulid:
+      type: string
+      pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+      examples: [01J00000000000000000000000]
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail, instance, correlation_id]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: [string, "null"], format: uuid }
+    RegisterAccount:
+      type: object
+      additionalProperties: false
+      required: [name, email, password, password_confirmation, timezone, locale]
+      properties:
+        name: { type: string, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, format: password, minLength: 12 }
+        password_confirmation: { type: string, format: password }
+        timezone: { type: string, examples: [America/New_York] }
+        locale: { type: string, enum: [en] }
+    User:
+      type: object
+      required: [id, name, email, timezone, locale, email_verified]
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        name: { type: string }
+        email: { type: string, format: email }
+        timezone: { type: string }
+        locale: { type: string }
+        email_verified: { type: boolean }
+        email_verified_at: { type: [string, "null"], format: date-time }
+    UserResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/User" }
+    Household:
+      type: object
+      required: [id, name, is_personal]
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        name: { type: string }
+        is_personal: { type: boolean }
+        role: { type: string, enum: [owner, member] }
+        member_count: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PaginationMeta:
+      type: object
+      required: [current_page, from, last_page, path, per_page, to, total]
+      properties:
+        current_page: { type: integer }
+        from: { type: [integer, "null"] }
+        last_page: { type: integer }
+        path: { type: string }
+        per_page: { type: integer }
+        to: { type: [integer, "null"] }
+        total: { type: integer }
+    PaginationLinks:
+      type: object
+      required: [first, last, prev, next]
+      properties:
+        first: { type: string }
+        last: { type: string }
+        prev: { type: [string, "null"] }
+        next: { type: [string, "null"] }
+    HouseholdCollection:
+      type: object
+      required: [data, links, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Household" } }
+        links: { $ref: "#/components/schemas/PaginationLinks" }
+        meta: { $ref: "#/components/schemas/PaginationMeta" }
+    PurchaseState:
+      type: string
+      enum: [draft, needs_review, active, archived]
+    CountingConvention:
+      type: string
+      enum: [purchase_day_inclusive, purchase_day_exclusive]
+      default: purchase_day_exclusive
+    PeriodUnit:
+      type: string
+      enum: [days, months, years]
+    PurchaseItemInput:
+      type: object
+      additionalProperties: false
+      required: [name, quantity]
+      properties:
+        name: { type: string, maxLength: 200 }
+        quantity: { type: integer, minimum: 1, maximum: 100000 }
+        unit_price_minor:
+          type: [integer, "null"]
+          minimum: 0
+          description: Integer minor units; floating-point money is rejected.
+        serial_number: { type: [string, "null"], maxLength: 160 }
+    PurchaseInput:
+      type: object
+      additionalProperties: false
+      required: [merchant, purchase_date, currency, total_minor, country_region, items]
+      properties:
+        merchant: { type: string, maxLength: 160 }
+        purchase_date: { type: string, format: date }
+        timezone: { type: string, examples: [America/New_York] }
+        receipt_number: { type: [string, "null"], maxLength: 120 }
+        currency: { type: string, pattern: "^[A-Z]{3}$", examples: [USD] }
+        total_minor:
+          type: integer
+          minimum: 0
+          description: Integer ISO-currency minor units, never a float.
+        country_region: { type: string, maxLength: 80 }
+        return_period_quantity: { type: [integer, "null"], minimum: 1, maximum: 1000 }
+        return_period_unit:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodUnit"
+            - type: "null"
+        return_counting_convention: { $ref: "#/components/schemas/CountingConvention" }
+        warranty_period_quantity: { type: [integer, "null"], minimum: 1, maximum: 1000 }
+        warranty_period_unit:
+          oneOf:
+            - $ref: "#/components/schemas/PeriodUnit"
+            - type: "null"
+        warranty_counting_convention: { $ref: "#/components/schemas/CountingConvention" }
+        manual_return_deadline: { type: [string, "null"], format: date }
+        manual_return_reason: { type: [string, "null"], maxLength: 240 }
+        manual_warranty_deadline: { type: [string, "null"], format: date }
+        manual_warranty_reason: { type: [string, "null"], maxLength: 240 }
+        notes: { type: [string, "null"], maxLength: 10000 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PurchaseItemInput" }
+    PurchaseItem:
+      allOf:
+        - $ref: "#/components/schemas/PurchaseItemInput"
+        - type: object
+          required: [id]
+          properties:
+            id: { $ref: "#/components/schemas/Ulid" }
+    Deadline:
+      type: object
+      required: [id, kind, due_at, due_on, timezone, source, rule_summary, trace, reminder_intervals, active]
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        kind: { type: string, enum: [return, warranty] }
+        due_at: { type: string, format: date-time }
+        due_on: { type: string, format: date }
+        timezone: { type: string }
+        source: { type: string, enum: [calculated, manual_override] }
+        rule_summary: { type: string }
+        trace: { type: array, items: { type: object, additionalProperties: true } }
+        reminder_intervals: { type: array, items: { type: integer } }
+        active: { type: boolean }
+    Purchase:
+      type: object
+      required:
+        - id
+        - household_id
+        - state
+        - merchant
+        - purchase_date
+        - timezone
+        - currency
+        - total_minor
+        - country_region
+        - items
+        - deadlines
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        household_id: { $ref: "#/components/schemas/Ulid" }
+        state: { $ref: "#/components/schemas/PurchaseState" }
+        merchant: { type: string }
+        purchase_date: { type: string, format: date }
+        timezone: { type: string }
+        receipt_number: { type: [string, "null"] }
+        currency: { type: string }
+        total_minor: { type: integer }
+        country_region: { type: string }
+        return_terms: { type: [object, "null"], additionalProperties: true }
+        warranty_terms: { type: [object, "null"], additionalProperties: true }
+        manual_return_deadline_at: { type: [string, "null"], format: date-time }
+        manual_return_reason: { type: [string, "null"] }
+        manual_warranty_deadline_at: { type: [string, "null"], format: date-time }
+        manual_warranty_reason: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        items: { type: array, items: { $ref: "#/components/schemas/PurchaseItem" } }
+        deadlines: { type: array, items: { $ref: "#/components/schemas/Deadline" } }
+        activated_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PurchaseResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/Purchase" }
+    PurchaseCollection:
+      type: object
+      required: [data, links, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Purchase" } }
+        links: { $ref: "#/components/schemas/PaginationLinks" }
+        meta: { $ref: "#/components/schemas/PaginationMeta" }
+    DocumentState:
+      type: string
+      enum: [uploaded, validation_pending, processing, needs_review, ready, failed, quarantined]
+    ExtractionField:
+      type: object
+      required: [key, value, normalized_value, confidence, source, validation_errors, confirmed_value]
+      properties:
+        key: { type: string }
+        value: { type: [string, "null"] }
+        normalized_value: { type: [string, "null"] }
+        confidence:
+          type: [string, "null"]
+          pattern: "^0(?:\\.\\d{1,4})?|1(?:\\.0{1,4})?$"
+        source: { type: string }
+        validation_errors: { type: array, items: { type: string } }
+        confirmed_value: { type: [string, "null"] }
+    ReceiptDocument:
+      type: object
+      required:
+        - id
+        - purchase_id
+        - household_id
+        - state
+        - filename
+        - mime_type
+        - size_bytes
+        - processing_attempts
+        - retain_original
+        - fields
+      properties:
+        id: { $ref: "#/components/schemas/Ulid" }
+        purchase_id: { $ref: "#/components/schemas/Ulid" }
+        household_id: { $ref: "#/components/schemas/Ulid" }
+        state: { $ref: "#/components/schemas/DocumentState" }
+        filename: { type: string }
+        mime_type: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        size_bytes: { type: integer, minimum: 1, maximum: 10485760 }
+        processing_attempts: { type: integer, minimum: 0, maximum: 3 }
+        ocr_provider: { type: [string, "null"] }
+        extraction_provider: { type: [string, "null"] }
+        prompt_version: { type: [string, "null"] }
+        user_error: { type: [string, "null"] }
+        retain_original: { type: boolean }
+        fields: { type: array, items: { $ref: "#/components/schemas/ExtractionField" } }
+        purchase:
+          oneOf:
+            - $ref: "#/components/schemas/Purchase"
+            - type: "null"
+        processed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ReceiptDocumentResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/ReceiptDocument" }
+    NotificationPreferencesInput:
+      type: object
+      additionalProperties: false
+      required: [in_app_enabled, email_enabled, return_intervals, warranty_intervals]
+      properties:
+        in_app_enabled: { type: boolean }
+        email_enabled: { type: boolean }
+        return_intervals:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 365 }
+        warranty_intervals:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 365 }
+        quiet_hours_start: { type: [string, "null"], pattern: "^[0-2][0-9]:[0-5][0-9]$" }
+        quiet_hours_end: { type: [string, "null"], pattern: "^[0-2][0-9]:[0-5][0-9]$" }
+    NotificationPreferences:
+      allOf:
+        - $ref: "#/components/schemas/NotificationPreferencesInput"
+        - type: object
+          required: [timezone]
+          properties:
+            timezone: { type: string }
+    NotificationPreferencesResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/NotificationPreferences" }
