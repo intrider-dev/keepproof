@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import authPrivateArchiveUrl from '../assets/auth-private-archive.webp'
 import AppIcon from '../components/AppIcon.vue'
 import BrandMark from '../components/BrandMark.vue'
 import type { UserResponse } from '../api/generated'
@@ -117,11 +116,8 @@ const submit = async (): Promise<void> => {
         <RouterLink to="/register">Create a private account</RouterLink>
       </p>
     </section>
-    <aside class="auth-story" aria-label="KeepProof privacy summary">
+    <aside class="auth-story auth-story--login" aria-label="KeepProof privacy summary">
       <div class="auth-story__card">
-        <div class="auth-story__login-visual" aria-hidden="true">
-          <img :src="authPrivateArchiveUrl" alt="" width="1200" height="800" decoding="async" />
-        </div>
         <span class="feature-icon feature-icon--large"><AppIcon name="shield" :size="27" /></span>
         <blockquote>“My receipts stay useful without becoming somebody else’s data.”</blockquote>
         <p>A product principle, not a customer testimonial.</p>
