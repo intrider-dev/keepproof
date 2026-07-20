@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a reproducible defect in KeepProof.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve KeepProof. Do not include receipts, email addresses, access tokens, storage URLs, or other personal or secret data. Security vulnerabilities must be reported privately as described in `SECURITY.md`, not through this form.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, and what impact did it have?
+      placeholder: A concise description of the defect.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use only synthetic data and include the smallest reliable sequence.
+      placeholder: |
+        1. Start the stack with ...
+        2. Sign in as ...
+        3. Open ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include redacted error output when useful.
+    validations:
+      required: true
+
+  - type: input
+    id: revision
+    attributes:
+      label: KeepProof revision
+      description: Git commit SHA or release tag.
+      placeholder: e.g. v0.1.0 or a 40-character commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation type
+      options:
+        - Docker Compose on Linux
+        - Docker Compose on macOS
+        - Docker Compose on Windows/WSL2
+        - Native development environment
+        - CI
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: OS, Docker/Compose versions, browser, and relevant configuration with secrets removed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or screenshots
+      description: Remove personal data, signed URLs, cookies, tokens, keys, receipt text, and local filesystem usernames.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for this defect.
+          required: true
+        - label: I used synthetic data and removed secrets and personal information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

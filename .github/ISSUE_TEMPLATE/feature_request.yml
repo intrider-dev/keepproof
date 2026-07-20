@@ -1,0 +1,68 @@
+name: Feature request
+description: Propose a focused product or engineering improvement.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the problem independently of a preferred implementation.
+      placeholder: When ..., a household member needs ..., because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What observable result would make the request successful?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional. Include alternatives and trade-offs if you have explored them.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - Purchases and deadlines
+        - Receipt processing and OCR
+        - Notifications
+        - Exports and deletion
+        - Household and authorization
+        - Frontend experience and accessibility
+        - API and integrations
+        - Operations and developer experience
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and security impact
+      description: What new data, permissions, provider, file handling, or abuse case would this introduce? Write "None identified" when appropriate.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope boundaries
+      description: What should explicitly remain out of scope?
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues and roadmap entries.
+          required: true
+        - label: This request preserves the privacy-first, local-first default unless it explains why not.
+          required: true

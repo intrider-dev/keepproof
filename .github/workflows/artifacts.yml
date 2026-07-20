@@ -1,0 +1,139 @@
+name: Build release-candidate artifacts
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Images, SBOMs, and source artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Derive artifact version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            semver='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+            if [[ ! "${GITHUB_REF_NAME}" =~ ${semver} ]]; then
+              echo "Tag must follow SemVer and start with v: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+            version="${GITHUB_REF_NAME}"
+          else
+            version="main-${GITHUB_SHA:0:12}"
+          fi
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build production backend image
+        run: >-
+          docker build
+          --file infra/docker/backend/Dockerfile
+          --target production
+          --tag keepproof/backend:${{ steps.version.outputs.value }}
+          .
+
+      - name: Build production web image
+        run: >-
+          docker build
+          --file infra/docker/nginx/Dockerfile
+          --target production
+          --tag keepproof/web:${{ steps.version.outputs.value }}
+          .
+
+      - name: Create artifact directory and image metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          docker image inspect \
+            "keepproof/backend:${{ steps.version.outputs.value }}" \
+            "keepproof/web:${{ steps.version.outputs.value }}" \
+            > "artifacts/images-${{ steps.version.outputs.value }}.json"
+
+      - name: Generate backend SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: keepproof/backend:${{ steps.version.outputs.value }}
+          format: spdx-json
+          output-file: artifacts/backend-${{ steps.version.outputs.value }}.spdx.json
+          syft-version: v1.48.0
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate web SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: keepproof/web:${{ steps.version.outputs.value }}
+          format: spdx-json
+          output-file: artifacts/web-${{ steps.version.outputs.value }}.spdx.json
+          syft-version: v1.48.0
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Prepare source archive and build notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          git archive \
+            --format=tar.gz \
+            --prefix="keepproof-${version}/" \
+            --output="artifacts/keepproof-${version}-source.tar.gz" \
+            HEAD
+
+          notes="artifacts/release-notes-${version}.md"
+          {
+            echo "# KeepProof ${version} build candidate"
+            echo
+            echo "Commit: \`${GITHUB_SHA}\`"
+            echo
+            echo "This workflow prepares reviewable artifacts only. It does not publish images or create a GitHub Release."
+            echo
+            echo "## Included commits"
+            echo
+          } > "${notes}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+            if [[ -n "${previous_tag}" ]]; then
+              git log --no-merges --pretty='- %s (%h)' "${previous_tag}..${GITHUB_SHA}" >> "${notes}"
+            else
+              git log --no-merges --pretty='- %s (%h)' "${GITHUB_SHA}" >> "${notes}"
+            fi
+          else
+            git log --no-merges --max-count=25 --pretty='- %s (%h)' >> "${notes}"
+          fi
+
+          (
+            cd artifacts
+            find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
+
+      - name: Upload versioned build artifacts
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: keepproof-${{ steps.version.outputs.value }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
