@@ -9,6 +9,7 @@ use App\Modules\Accounts\Http\Controllers\ProfileController;
 use App\Modules\Households\Http\Controllers\HouseholdController;
 use App\Modules\Households\Http\Controllers\HouseholdInvitationController;
 use App\Modules\Households\Http\Controllers\HouseholdMemberController;
+use App\Modules\Purchases\Http\Controllers\PurchaseController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -45,6 +46,12 @@ Route::prefix('v1')->group(function (): void {
             Route::delete('/households/{household}/members/{member}', [HouseholdMemberController::class, 'destroy']);
             Route::post('/households/{household}/invitations', [HouseholdInvitationController::class, 'store']);
             Route::post('/invitations/{invitation}/accept', [HouseholdInvitationController::class, 'accept']);
+
+            Route::get('/households/{household}/purchases', [PurchaseController::class, 'index']);
+            Route::post('/households/{household}/purchases', [PurchaseController::class, 'store']);
+            Route::get('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'show']);
+            Route::put('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'update']);
+            Route::delete('/households/{household}/purchases/{purchase}', [PurchaseController::class, 'destroy']);
         });
     });
 });

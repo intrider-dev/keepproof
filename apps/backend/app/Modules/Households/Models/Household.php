@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Households\Models;
 
 use App\Modules\Accounts\Models\User;
+use App\Modules\Purchases\Models\Purchase;
 use Database\Factories\HouseholdFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -26,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $owner
  * @property-read Collection<int, User> $members
  * @property-read Collection<int, HouseholdMember> $memberships
+ * @property-read Collection<int, Purchase> $purchases
  */
 final class Household extends Model
 {
@@ -61,6 +63,12 @@ final class Household extends Model
     public function invitations(): HasMany
     {
         return $this->hasMany(HouseholdInvitation::class);
+    }
+
+    /** @return HasMany<Purchase, $this> */
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
     }
 
     protected static function newFactory(): HouseholdFactory

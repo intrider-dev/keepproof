@@ -7,6 +7,8 @@ namespace App\Providers;
 use App\Modules\Accounts\Models\User;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Policies\HouseholdPolicy;
+use App\Modules\Purchases\Models\Purchase;
+use App\Modules\Purchases\Policies\PurchasePolicy;
 use App\Modules\Shared\Configuration\FrontendUrl;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -39,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Household::class, HouseholdPolicy::class);
+        Gate::policy(Purchase::class, PurchasePolicy::class);
 
         Route::bind('household', static function (string $value): Household {
             $user = request()->user();
@@ -48,6 +51,24 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $user->households()->whereKey($value)->firstOrFail();
+        });
+
+        Route::bind('purchase', static function (string $value): Purchase {
+            $household = request()->route('household');
+
+            if ($household instanceof Household) {
+                return $household->purchases()->whereKey($value)->firstOrFail();
+            }
+
+            $user = request()->user();
+            if (! $user instanceof User) {
+                throw (new ModelNotFoundException)->setModel(Purchase::class, [$value]);
+            }
+
+            return Purchase::query()
+                ->whereKey($value)
+                ->whereIn('household_id', $user->households()->select('households.id'))
+                ->firstOrFail();
         });
 
         RateLimiter::for('auth.login', static fn (Request $request): Limit => Limit::perMinute(5)->by(
