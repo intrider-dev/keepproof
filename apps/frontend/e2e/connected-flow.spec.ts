@@ -3,6 +3,7 @@ import { expect, type BrowserContext, type Page, test } from '@playwright/test'
 
 const connected = process.env.CONNECTED_E2E === 'true'
 const mailpitBaseUrl = process.env.MAILPIT_BASE_URL ?? 'http://127.0.0.1:8025'
+const publicOrigin = process.env.PLAYWRIGHT_PUBLIC_ORIGIN ?? 'http://localhost:8080'
 const password = 'E2eSecure!2026'
 
 interface HouseholdCollection {
@@ -102,6 +103,13 @@ const closeContext = async (context: BrowserContext): Promise<void> => {
   }
 }
 
+const cookieValue = async (context: BrowserContext, name: string): Promise<string> => {
+  const cookie = (await context.cookies()).find((candidate) => candidate.name === name)
+  if (!cookie) throw new Error(`Expected the ${name} browser cookie to exist.`)
+
+  return cookie.value
+}
+
 test.describe('connected receipt lifecycle', () => {
   test.skip(!connected, 'Runs against the Docker Compose application with real infrastructure.')
 
@@ -182,6 +190,88 @@ test.describe('connected receipt lifecycle', () => {
     } finally {
       if (memberContext) await closeContext(memberContext)
       await closeContext(ownerContext)
+    }
+  })
+
+  test('configured public origin can establish, rotate, and revoke a stateful login session', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000)
+    const baseURL = process.env.PLAYWRIGHT_BASE_URL
+    const context = await browser.newContext({ baseURL })
+    const page = await context.newPage()
+    const email = uniqueEmail('public-origin-login')
+
+    try {
+      await registerAndVerify(page, 'Taylor', email)
+      await page.getByRole('button', { name: /Sign out/ }).click()
+      await expect(
+        page.getByRole('heading', { name: 'Never miss a return window or warranty deadline.' }),
+      ).toBeVisible()
+
+      await page.request.get('/sanctum/csrf-cookie', {
+        headers: {
+          Accept: 'application/json',
+          Origin: publicOrigin,
+          Referer: `${publicOrigin}/login`,
+        },
+      })
+      const sessionBeforeLogin = await cookieValue(context, 'laravel-session')
+      const xsrfToken = decodeURIComponent(await cookieValue(context, 'XSRF-TOKEN'))
+      const login = await page.request.post('/api/v1/auth/login', {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Origin: publicOrigin,
+          Referer: `${publicOrigin}/login`,
+          'X-XSRF-TOKEN': xsrfToken,
+        },
+        data: { email, password },
+      })
+
+      expect(login.status(), await login.text()).toBe(200)
+      const sessionAfterLogin = await cookieValue(context, 'laravel-session')
+      expect(sessionAfterLogin).not.toBe(sessionBeforeLogin)
+
+      const me = await page.request.get('/api/v1/me', {
+        headers: {
+          Accept: 'application/json',
+          Origin: publicOrigin,
+          Referer: `${publicOrigin}/app/dashboard`,
+        },
+      })
+      const meBody = (await me.json()) as { data: { email: string } }
+      expect(me.status(), JSON.stringify(meBody)).toBe(200)
+      expect(meBody.data.email).toBe(email)
+
+      await page.goto('/app/dashboard')
+      await expect(page.getByRole('heading', { name: /Good morning, Taylor/ })).toBeVisible()
+
+      const authenticatedSession = await cookieValue(context, 'laravel-session')
+      const logoutResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/v1/auth/logout') && response.request().method() === 'POST',
+      )
+      await page.getByRole('button', { name: /Sign out/ }).click()
+      const logout = await logoutResponsePromise
+
+      expect(logout.status()).toBe(204)
+      await expect(
+        page.getByRole('heading', { name: 'Never miss a return window or warranty deadline.' }),
+      ).toBeVisible()
+      const anonymousSession = await cookieValue(context, 'laravel-session')
+      expect(anonymousSession).not.toBe(authenticatedSession)
+
+      const revoked = await page.request.get('/api/v1/me', {
+        headers: {
+          Accept: 'application/json',
+          Origin: publicOrigin,
+          Referer: `${publicOrigin}/login`,
+        },
+      })
+      expect(revoked.status()).toBe(401)
+    } finally {
+      await closeContext(context)
     }
   })
 })

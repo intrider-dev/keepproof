@@ -19,7 +19,7 @@ use App\Modules\Purchases\Http\Controllers\PurchaseController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
-    Route::prefix('auth')->group(function (): void {
+    Route::prefix('auth')->middleware('stateful.session')->group(function (): void {
         Route::post('/register', [AuthenticationController::class, 'register'])
             ->middleware('throttle:auth.register');
         Route::post('/login', [AuthenticationController::class, 'login'])

@@ -2,7 +2,7 @@ COMPOSE := docker compose
 BACKEND := $(COMPOSE) run --rm backend
 FRONTEND := $(COMPOSE) run --rm frontend
 
-.PHONY: setup up down test quality e2e seed demo load logs reset build production-build env
+.PHONY: setup up down test quality e2e seed demo load logs reset build production-build env infra-test
 
 env:
 	@test -f .env || cp .env.example .env
@@ -25,21 +25,25 @@ up: env
 down:
 	$(COMPOSE) down --remove-orphans
 
-test:
+infra-test: env
+	@APP_PORT=18080 COMPOSE_PUBLIC_ORIGIN= $(COMPOSE) --profile tools config --format json | $(COMPOSE) run --rm --no-deps -T frontend node /workspace/tests/infra/assert-compose-config.mjs development 18080
+	@APP_PORT=18080 APP_URL=https://proof.example.test FRONTEND_URL=https://proof.example.test SANCTUM_STATEFUL_DOMAINS=proof.example.test CORS_ALLOWED_ORIGINS=https://proof.example.test $(COMPOSE) -f compose.yaml -f compose.production.yaml config --format json | $(COMPOSE) run --rm --no-deps -T frontend node /workspace/tests/infra/assert-compose-config.mjs production https://proof.example.test
+
+test: infra-test
 	$(BACKEND) composer test
 	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer test
 	$(FRONTEND) npm run test:unit
 
-quality:
+quality: infra-test
 	$(BACKEND) composer quality
 	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer check
 	$(FRONTEND) npm run quality
 
-e2e: export APP_URL=http://nginx:8080
-e2e: export FRONTEND_URL=http://nginx:8080
-e2e: export OCR_DRIVER=fixture
-e2e: up
-	$(COMPOSE) --profile tools run --rm e2e
+e2e: env infra-test
+	@set -eu; \
+	trap '$(COMPOSE) up --detach --wait' EXIT; \
+	COMPOSE_PUBLIC_ORIGIN=http://nginx:8080 OCR_DRIVER=fixture $(COMPOSE) up --detach --wait; \
+	COMPOSE_PUBLIC_ORIGIN=http://nginx:8080 OCR_DRIVER=fixture $(COMPOSE) --profile tools run --rm e2e
 
 seed:
 	$(BACKEND) php artisan migrate --force

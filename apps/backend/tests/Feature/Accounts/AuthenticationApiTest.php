@@ -120,6 +120,74 @@ final class AuthenticationApiTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
+    public function test_untrusted_origin_fails_closed_before_anonymous_account_mutations(): void
+    {
+        Notification::fake();
+        $existing = User::factory()->create([
+            'email' => 'existing@example.com',
+            'password' => 'Correct-Horse-42!',
+        ]);
+        $untrustedHeaders = [
+            'Origin' => 'https://untrusted.example',
+            'Referer' => 'https://untrusted.example/sign-in',
+        ];
+
+        $this->withHeaders($untrustedHeaders)->postJson('/api/v1/auth/register', [
+            'name' => 'Untrusted Registration',
+            'email' => 'untrusted@example.com',
+            'password' => 'Correct-Horse-42!',
+            'password_confirmation' => 'Correct-Horse-42!',
+            'timezone' => 'UTC',
+            'locale' => 'en',
+        ])->assertStatus(419)
+            ->assertHeader('Content-Type', 'application/problem+json')
+            ->assertJsonPath('detail', 'The CSRF token is missing or expired.');
+
+        $this->withHeaders($untrustedHeaders)->postJson('/api/v1/auth/login', [
+            'email' => $existing->email,
+            'password' => 'Correct-Horse-42!',
+        ])->assertStatus(419)
+            ->assertJsonPath('status', 419);
+
+        $this->withHeaders($untrustedHeaders)->postJson('/api/v1/auth/forgot-password', [
+            'email' => $existing->email,
+        ])->assertStatus(419);
+        $this->withHeaders($untrustedHeaders)->postJson('/api/v1/auth/reset-password', [
+            'email' => $existing->email,
+            'token' => 'untrusted-token',
+            'password' => 'Another-Horse-126!',
+            'password_confirmation' => 'Another-Horse-126!',
+        ])->assertStatus(419);
+
+        $this->assertDatabaseMissing('users', ['email' => 'untrusted@example.com']);
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'account.logged_in']);
+        Notification::assertNothingSent();
+    }
+
+    public function test_configured_custom_port_origin_can_establish_and_rotate_a_session(): void
+    {
+        config()->set('sanctum.stateful', ['localhost:18080']);
+        $user = User::factory()->create([
+            'email' => 'custom-port@example.com',
+            'password' => 'Correct-Horse-42!',
+        ]);
+
+        $response = $this->withHeaders([
+            'Origin' => 'http://localhost:18080',
+            'Referer' => 'http://localhost:18080/login',
+        ])->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
+            'password' => 'Correct-Horse-42!',
+        ]);
+        $sessionCookie = config('session.cookie');
+        self::assertIsString($sessionCookie);
+
+        $response->assertOk()
+            ->assertCookie($sessionCookie)
+            ->assertJsonPath('data.id', $user->id);
+        $this->assertAuthenticatedAs($user);
+    }
+
     public function test_login_regenerates_the_session_and_logout_invalidates_it(): void
     {
         $user = User::factory()->create([
@@ -276,6 +344,33 @@ final class AuthenticationApiTest extends TestCase
         Notification::assertSentTo($user, VerifyEmail::class);
         $this->assertNull($user->refresh()->email_verified_at);
         $this->assertDatabaseHas('audit_logs', ['action' => 'account.profile_updated']);
+    }
+
+    public function test_profile_show_and_verification_resend_use_the_current_session_user(): void
+    {
+        Notification::fake();
+        $user = User::factory()->unverified()->create([
+            'name' => 'Casey Morgan',
+            'email' => 'casey@example.com',
+            'timezone' => 'Europe/Paris',
+            'locale' => 'en',
+        ]);
+
+        $this->actingAs($user)->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('data.email', 'casey@example.com')
+            ->assertJsonPath('data.timezone', 'Europe/Paris')
+            ->assertJsonPath('data.email_verified', false);
+
+        $this->actingAs($user)->postJson('/api/v1/email/verification-notification')
+            ->assertNoContent();
+        Notification::assertSentToTimes($user, VerifyEmail::class, 1);
+
+        $user->markEmailAsVerified();
+        $this->actingAs($user)->postJson('/api/v1/email/verification-notification')
+            ->assertNoContent();
+        Notification::assertSentToTimes($user, VerifyEmail::class, 1);
     }
 
     public function test_unverified_users_cannot_access_household_data(): void

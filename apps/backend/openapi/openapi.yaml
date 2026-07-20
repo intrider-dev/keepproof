@@ -59,8 +59,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
+        "419":
+          $ref: "#/components/responses/CsrfProblem"
         "422":
           $ref: "#/components/responses/ValidationProblem"
+        "429":
+          $ref: "#/components/responses/RateLimitProblem"
   /api/v1/auth/login:
     post:
       tags: [Authentication]
@@ -83,6 +87,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
+        "419":
+          $ref: "#/components/responses/CsrfProblem"
         "422":
           $ref: "#/components/responses/ValidationProblem"
         "429":
@@ -112,7 +118,9 @@ paths:
                 email: { type: string, format: email }
       responses:
         "202": { description: "Generic accepted response, regardless of account existence." }
+        "419": { $ref: "#/components/responses/CsrfProblem" }
         "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/auth/reset-password:
     post:
       tags: [Authentication]
@@ -132,7 +140,9 @@ paths:
                 password_confirmation: { type: string, format: password }
       responses:
         "204": { description: Password reset. }
+        "419": { $ref: "#/components/responses/CsrfProblem" }
         "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/auth/confirm-password:
     post:
       tags: [Authentication]
@@ -158,7 +168,9 @@ paths:
                 required: [confirmed_until]
                 properties:
                   confirmed_until: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
         "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/email/verification-notification:
     post:
       tags: [Authentication]
@@ -166,8 +178,9 @@ paths:
       summary: Resend the email-verification link.
       security: [{ cookieAuth: [] }]
       responses:
-        "202": { description: Verification email queued or already verified. }
+        "204": { description: Verification email queued or already verified. }
         "401": { $ref: "#/components/responses/AuthenticationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/email/verify/{id}/{hash}:
     get:
       tags: [Authentication]
@@ -790,6 +803,11 @@ components:
           schema: { $ref: "#/components/schemas/ProblemDetails" }
     AuthorizationProblem:
       description: The action is not authorized.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    CsrfProblem:
+      description: The stateful browser session or CSRF token is missing or expired.
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/ProblemDetails" }

@@ -29,6 +29,59 @@ function Initialize-EnvironmentFiles {
         }
     }
 }
+function Invoke-ComposeContractTests {
+    $VariableNames = @(
+        'APP_PORT',
+        'APP_URL',
+        'FRONTEND_URL',
+        'COMPOSE_PUBLIC_ORIGIN',
+        'SANCTUM_STATEFUL_DOMAINS',
+        'CORS_ALLOWED_ORIGINS'
+    )
+    $PreviousValues = @{}
+
+    foreach ($Name in $VariableNames) {
+        $PreviousValues[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    }
+
+    try {
+        $env:APP_PORT = '18080'
+        Remove-Item Env:\COMPOSE_PUBLIC_ORIGIN -ErrorAction SilentlyContinue
+        $DevelopmentConfig = & docker compose --profile tools config --format json
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to render the development Compose configuration.'
+        }
+        $DevelopmentConfig | & docker compose run --rm --no-deps -T frontend node /workspace/tests/infra/assert-compose-config.mjs development 18080
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The development Compose origin contract failed.'
+        }
+
+        $ProductionOrigin = 'https://proof.example.test'
+        $env:APP_URL = $ProductionOrigin
+        $env:FRONTEND_URL = $ProductionOrigin
+        $env:SANCTUM_STATEFUL_DOMAINS = 'proof.example.test'
+        $env:CORS_ALLOWED_ORIGINS = $ProductionOrigin
+        $ProductionConfig = & docker compose -f compose.yaml -f compose.production.yaml config --format json
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to render the production Compose configuration.'
+        }
+        $ProductionConfig | & docker compose run --rm --no-deps -T frontend node /workspace/tests/infra/assert-compose-config.mjs production $ProductionOrigin
+        if ($LASTEXITCODE -ne 0) {
+            throw 'The production Compose origin contract failed.'
+        }
+    }
+    finally {
+        foreach ($Name in $VariableNames) {
+            $PreviousValue = $PreviousValues[$Name]
+            if ($null -eq $PreviousValue) {
+                Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+            }
+            else {
+                [Environment]::SetEnvironmentVariable($Name, $PreviousValue, 'Process')
+            }
+        }
+    }
+}
 
 switch ($Task) {
     'setup' {
@@ -48,32 +101,34 @@ switch ($Task) {
     }
     'down' { Invoke-Compose down --remove-orphans }
     'test' {
+        Invoke-ComposeContractTests
         Invoke-Compose run --rm backend composer test
         Invoke-Compose run --rm --workdir /workspace/packages/deadline-engine backend composer test
         Invoke-Compose run --rm frontend npm run test:unit
     }
     'quality' {
+        Invoke-ComposeContractTests
         Invoke-Compose run --rm backend composer quality
         Invoke-Compose run --rm --workdir /workspace/packages/deadline-engine backend composer check
         Invoke-Compose run --rm frontend npm run quality
     }
     'e2e' {
         Initialize-EnvironmentFiles
-        $PreviousAppUrl = $env:APP_URL
-        $PreviousFrontendUrl = $env:FRONTEND_URL
+        Invoke-ComposeContractTests
+        $PreviousComposePublicOrigin = $env:COMPOSE_PUBLIC_ORIGIN
         $PreviousOcrDriver = $env:OCR_DRIVER
 
         try {
-            $env:APP_URL = 'http://nginx:8080'
-            $env:FRONTEND_URL = 'http://nginx:8080'
+            $env:COMPOSE_PUBLIC_ORIGIN = 'http://nginx:8080'
             $env:OCR_DRIVER = 'fixture'
             Invoke-Compose up --detach --wait
             Invoke-Compose --profile tools run --rm e2e
         }
         finally {
-            $env:APP_URL = $PreviousAppUrl
-            $env:FRONTEND_URL = $PreviousFrontendUrl
+            $env:COMPOSE_PUBLIC_ORIGIN = $PreviousComposePublicOrigin
             $env:OCR_DRIVER = $PreviousOcrDriver
+            # Recreate affected services with their normal public origin even when E2E fails.
+            Invoke-Compose up --detach --wait
         }
     }
     'seed' {
@@ -87,7 +142,11 @@ switch ($Task) {
         Invoke-Compose run --rm backend php artisan migrate --force
         Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
         Invoke-Compose run --rm backend php artisan db:seed --force
-        $AppPort = if ([string]::IsNullOrWhiteSpace($env:APP_PORT)) { '8080' } else { $env:APP_PORT }
+        $PublishedAddress = (& docker compose port nginx 8080).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($PublishedAddress)) {
+            throw 'Unable to determine the published KeepProof application port.'
+        }
+        $AppPort = ($PublishedAddress -split ':')[-1]
         Write-Output "KeepProof: http://localhost:$AppPort"
         Write-Output 'Mailpit: http://localhost:8025'
     }

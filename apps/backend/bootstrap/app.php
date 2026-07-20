@@ -2,6 +2,7 @@
 
 use App\Modules\Accounts\Exceptions\SharedHouseholdOwnershipBlocksDeletion;
 use App\Modules\Accounts\Http\Middleware\RequireRecentPasswordConfirmation;
+use App\Modules\Accounts\Http\Middleware\RequireStatefulSession;
 use App\Modules\Shared\Http\Middleware\AssignCorrelationId;
 use App\Modules\Shared\Http\ProblemDetails;
 use Illuminate\Auth\AuthenticationException;
@@ -24,7 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         $middleware->throttleApi('api');
         $middleware->redirectGuestsTo(null);
-        $middleware->alias(['password.recent' => RequireRecentPasswordConfirmation::class]);
+        $middleware->alias([
+            'password.recent' => RequireRecentPasswordConfirmation::class,
+            'stateful.session' => RequireStatefulSession::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

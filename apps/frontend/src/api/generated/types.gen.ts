@@ -299,6 +299,10 @@ export type RegisterAccountData = {
 
 export type RegisterAccountErrors = {
     /**
+     * The stateful browser session or CSRF token is missing or expired.
+     */
+    419: ProblemDetails;
+    /**
      * Request validation failed.
      */
     422: ProblemDetails & {
@@ -306,6 +310,10 @@ export type RegisterAccountErrors = {
             [key: string]: Array<string>;
         };
     };
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
 };
 
 export type RegisterAccountError = RegisterAccountErrors[keyof RegisterAccountErrors];
@@ -330,6 +338,10 @@ export type LoginData = {
 };
 
 export type LoginErrors = {
+    /**
+     * The stateful browser session or CSRF token is missing or expired.
+     */
+    419: ProblemDetails;
     /**
      * Request validation failed.
      */
@@ -391,6 +403,10 @@ export type RequestPasswordResetData = {
 
 export type RequestPasswordResetErrors = {
     /**
+     * The stateful browser session or CSRF token is missing or expired.
+     */
+    419: ProblemDetails;
+    /**
      * Request validation failed.
      */
     422: ProblemDetails & {
@@ -398,6 +414,10 @@ export type RequestPasswordResetErrors = {
             [key: string]: Array<string>;
         };
     };
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
 };
 
 export type RequestPasswordResetError = RequestPasswordResetErrors[keyof RequestPasswordResetErrors];
@@ -423,6 +443,10 @@ export type ResetPasswordData = {
 
 export type ResetPasswordErrors = {
     /**
+     * The stateful browser session or CSRF token is missing or expired.
+     */
+    419: ProblemDetails;
+    /**
      * Request validation failed.
      */
     422: ProblemDetails & {
@@ -430,6 +454,10 @@ export type ResetPasswordErrors = {
             [key: string]: Array<string>;
         };
     };
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
 };
 
 export type ResetPasswordError = ResetPasswordErrors[keyof ResetPasswordErrors];
@@ -454,6 +482,10 @@ export type ConfirmPasswordData = {
 
 export type ConfirmPasswordErrors = {
     /**
+     * Authentication is required.
+     */
+    401: ProblemDetails;
+    /**
      * Request validation failed.
      */
     422: ProblemDetails & {
@@ -461,6 +493,10 @@ export type ConfirmPasswordErrors = {
             [key: string]: Array<string>;
         };
     };
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
 };
 
 export type ConfirmPasswordError = ConfirmPasswordErrors[keyof ConfirmPasswordErrors];
@@ -488,6 +524,10 @@ export type ResendVerificationEmailErrors = {
      * Authentication is required.
      */
     401: ProblemDetails;
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
 };
 
 export type ResendVerificationEmailError = ResendVerificationEmailErrors[keyof ResendVerificationEmailErrors];
@@ -496,8 +536,10 @@ export type ResendVerificationEmailResponses = {
     /**
      * Verification email queued or already verified.
      */
-    202: unknown;
+    204: void;
 };
+
+export type ResendVerificationEmailResponse = ResendVerificationEmailResponses[keyof ResendVerificationEmailResponses];
 
 export type VerifyEmailData = {
     body?: never;

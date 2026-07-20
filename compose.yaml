@@ -15,8 +15,9 @@ x-backend: &backend
   environment:
     APP_ENV: local
     APP_DEBUG: "true"
-    APP_URL: ${APP_URL:-http://localhost:8080}
-    FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+    APP_PORT: ${APP_PORT:-8080}
+    APP_URL: ${COMPOSE_PUBLIC_ORIGIN:-http://localhost:${APP_PORT:-8080}}
+    FRONTEND_URL: ${COMPOSE_PUBLIC_ORIGIN:-http://localhost:${APP_PORT:-8080}}
     LOG_CHANNEL: stderr
     LOG_LEVEL: debug
     DB_CONNECTION: pgsql
@@ -28,8 +29,8 @@ x-backend: &backend
     CACHE_STORE: redis
     QUEUE_CONNECTION: redis
     SESSION_DRIVER: database
-    SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:8080,localhost:5173,127.0.0.1,127.0.0.1:8080,127.0.0.1:5173,nginx,nginx:8080}
-    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://127.0.0.1:8080,http://127.0.0.1:5173,http://nginx:8080}
+    SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,localhost:8080,localhost:5173,127.0.0.1,127.0.0.1:8080,127.0.0.1:5173,nginx,nginx:8080},localhost:${APP_PORT:-8080},127.0.0.1:${APP_PORT:-8080}
+    CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://127.0.0.1:8080,http://127.0.0.1:5173,http://nginx:8080},http://localhost:${APP_PORT:-8080},http://127.0.0.1:${APP_PORT:-8080}
     REDIS_HOST: redis
     REDIS_PORT: 6379
     REDIS_PASSWORD: ${REDIS_PASSWORD:-keepproof_local_only}
@@ -213,6 +214,7 @@ services:
     working_dir: /workspace/apps/frontend
     environment:
       PLAYWRIGHT_BASE_URL: http://nginx:8080
+      PLAYWRIGHT_PUBLIC_ORIGIN: http://localhost:${APP_PORT:-8080}
       MAILPIT_BASE_URL: http://mailpit:8025
       CONNECTED_E2E: "true"
       CI: "true"
