@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Modules\Accounts\Http\Controllers\AuthenticationController;
+use App\Modules\Accounts\Http\Controllers\EmailVerificationController;
+use App\Modules\Accounts\Http\Controllers\PasswordController;
+use App\Modules\Accounts\Http\Controllers\ProfileController;
+use App\Modules\Households\Http\Controllers\HouseholdController;
+use App\Modules\Households\Http\Controllers\HouseholdInvitationController;
+use App\Modules\Households\Http\Controllers\HouseholdMemberController;
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('v1')->group(function (): void {
+    Route::prefix('auth')->group(function (): void {
+        Route::post('/register', [AuthenticationController::class, 'register'])
+            ->middleware('throttle:auth.register');
+        Route::post('/login', [AuthenticationController::class, 'login'])
+            ->middleware('throttle:auth.login');
+        Route::post('/forgot-password', [PasswordController::class, 'forgot'])
+            ->middleware('throttle:auth.password');
+        Route::post('/reset-password', [PasswordController::class, 'reset'])
+            ->middleware('throttle:auth.password');
+    });
+
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::post('/auth/logout', [AuthenticationController::class, 'logout']);
+        Route::post('/auth/confirm-password', [PasswordController::class, 'confirm'])
+            ->middleware('throttle:6,1');
+        Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+            ->middleware('throttle:3,1');
+        Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+            ->middleware(['signed', 'throttle:6,1'])
+            ->name('verification.verify');
+
+        Route::get('/me', [ProfileController::class, 'show']);
+
+        Route::middleware('verified')->group(function (): void {
+            Route::patch('/me', [ProfileController::class, 'update']);
+
+            Route::get('/households', [HouseholdController::class, 'index']);
+            Route::get('/households/{household}', [HouseholdController::class, 'show']);
+            Route::patch('/households/{household}', [HouseholdController::class, 'update']);
+            Route::get('/households/{household}/members', [HouseholdMemberController::class, 'index']);
+            Route::delete('/households/{household}/members/{member}', [HouseholdMemberController::class, 'destroy']);
+            Route::post('/households/{household}/invitations', [HouseholdInvitationController::class, 'store']);
+            Route::post('/invitations/{invitation}/accept', [HouseholdInvitationController::class, 'accept']);
+        });
+    });
+});
