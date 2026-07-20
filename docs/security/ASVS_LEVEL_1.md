@@ -171,10 +171,10 @@ Dependency remediation targets for reachable vulnerabilities are: block release 
 
 Local release-candidate evidence was recorded on 2026-07-20 after a clean KeepProof volume reset and setup:
 
-- Backend quality: 82 tests and 585 assertions passed. Composer validation and audit, Pint across 181 files, PHPStan/Larastan, and the real Tesseract PNG/PDF contracts inside the backend image passed.
+- Backend quality: 92 tests and 697 assertions passed. Composer validation and audit, Pint across 182 files, PHPStan/Larastan, Compose origin contracts, and the real Tesseract PNG/PDF contracts inside the backend image passed.
 - Deadline Engine: 34 tests and 46,276 assertions passed; Composer validation, PHPStan, and audit passed.
 - Frontend: 7 test files and 22 tests passed; Prettier, ESLint, strict TypeScript, OpenAPI lint, generated-client drift detection, production build, and `npm audit --audit-level=high` passed with zero reported high-severity vulnerabilities.
-- Connected Playwright: 9/9 tests passed, including two-account tenant isolation, verified registration, private object storage, Redis-backed processing, review/confirmation, reminder display, ICS/ZIP inspection, accessibility smoke tests, and screenshot generation.
+- Connected Playwright: 10/10 tests passed, including two-account tenant isolation, verified registration, public-origin session rotation/revocation, private object storage, Redis-backed processing, review/confirmation, reminder display, ICS/ZIP inspection, accessibility smoke tests, and screenshot generation.
 - Production images built successfully. The non-root Nginx configuration passed `nginx -t`, an ephemeral production-ingress smoke request returned HTTP 200, and anonymous private-storage access remained denied.
 - Reminder, partial deletion, tenant isolation, upload, stored-XSS, mass-assignment, prompt-injection, signed-URL, export, password/session, and log-redaction tests are part of the suites above.
 

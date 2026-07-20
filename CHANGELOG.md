@@ -33,6 +33,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- Stateful SPA authentication now derives its first-party origin from the published Compose port, fails closed instead of raising a session-store error when an origin is not trusted, and restores the public origin after connected E2E runs.
+- Notification preference reads consistently return HTTP 200 even when the default preference row is created on first access.
+- Critical regression coverage now includes public-origin session rotation/revocation, household-list isolation, owner-only invitations, purchase and extraction rollback, failed-document retry, original deletion, and notification ownership.
 - Clean frontend dependency volumes are writable by the non-root runtime user.
 - Compose environment values remain visible to Laravel's local HTTP server, and Nginx resolves recreated containers dynamically.
 - Internal HTTP Playwright runs use a secure UUIDv4 fallback when `crypto.randomUUID()` is unavailable.

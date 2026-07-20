@@ -163,13 +163,13 @@ The connected E2E registers and verifies two real accounts, uploads the syntheti
 On 2026-07-20:
 
 - A clean `reset` followed by `setup` completed in 188.4 seconds, including dependency installation, fresh PostgreSQL migrations, and the private-storage sentinel check.
-- The root quality gate completed in 69.7 seconds: Composer validation and audit, Pint across 181 files, PHPStan/Larastan with no errors, 82 backend tests with 585 assertions, and both real Tesseract PNG/PDF contract tests passed inside the backend container.
+- The root quality gate completed in 89.8 seconds: Compose origin contracts, Composer validation and audit, Pint across 182 files, PHPStan/Larastan with no errors, 92 backend tests with 697 assertions, and both real Tesseract PNG/PDF contract tests passed inside the backend container.
 - Deadline Engine: Composer validation, PHPStan, and audit passed; 34 tests executed 46,276 assertions.
 - Frontend: Prettier, Redocly OpenAPI lint, generated-client drift check, ESLint, strict Vue TypeScript, 7 test files with 22 tests, production build, and the high-severity npm audit all passed.
-- The post-clean Playwright run passed 9/9 tests in 33.4 seconds; the connected receipt lifecycle took 12.3 seconds. The complete wrapper, including browser setup and both projects, completed in 70.5 seconds.
-- The standalone root test command passed in 41.2 seconds. The production images built successfully, the non-root Nginx configuration passed `nginx -t`, and an ephemeral production-ingress smoke request returned HTTP 200.
+- The current Playwright run passed 10/10 tests in 37.0 seconds; the connected receipt lifecycle took 11.9 seconds and the public-origin session regression took 4.2 seconds. The complete wrapper, including origin checks, browser setup, both projects, and restoration of the normal development origin, completed in 116.4 seconds.
+- The standalone root test command passed in 44.4 seconds. The production images built successfully, the non-root Nginx configuration passed `nginx -t`, and an ephemeral production-ingress smoke request returned HTTP 200.
 
-No coverage percentage is published because this run did not measure one. High assertion counts in the property tests are evidence of exercised inputs, not a substitute for risk-based review.
+No coverage percentage is published because this run did not measure one. High assertion counts in the property tests are evidence of exercised inputs, not a substitute for risk-based review. The maintained risk-to-test mapping is in [Testing Strategy](TESTING.md).
 
 ## Performance measurements
 

@@ -200,7 +200,7 @@ The landing-page **Try the local demo** path provides an immediate synthetic wal
 | `make production-build`    | Build production PHP-FPM and static Nginx images without publishing them                                                                          |
 | `make seed` / `make reset` | Refresh synthetic data / remove KeepProof local containers and volumes                                                                            |
 
-The latest local release-candidate audit is recorded in [Case Study](docs/CASE_STUDY.md#testing-strategy) and [Local Performance Baseline](docs/performance/LOCAL_BASELINE.md). [`.github/workflows`](.github/workflows/) is configured to repeat the same underlying gates in CI.
+The latest local release-candidate audit is recorded in the [Testing Strategy](docs/TESTING.md), [Case Study](docs/CASE_STUDY.md#testing-strategy), and [Local Performance Baseline](docs/performance/LOCAL_BASELINE.md). [`.github/workflows`](.github/workflows/) is configured to repeat the same underlying gates in CI.
 
 ## Security and privacy
 
@@ -257,6 +257,7 @@ Issue-ready scopes and acceptance criteria live in [Stretch Issues](docs/roadmap
 - [5–7 minute recruiter tour](docs/RECRUITER_TOUR.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Case study](docs/CASE_STUDY.md)
+- [Testing strategy and critical-risk matrix](docs/TESTING.md)
 - [Implementation plan and acceptance gates](docs/IMPLEMENTATION_PLAN.md)
 - [Maintainer interview notes](docs/MAINTAINER_NOTES.md)
 - [Contributing](CONTRIBUTING.md) and [Changelog](CHANGELOG.md)

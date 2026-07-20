@@ -22,6 +22,8 @@ Cookie policy is:
 
 The local HTTP profile may disable Secure only in its documented environment override. CORS uses an exact allowlist and credentialed requests; wildcard origins are forbidden.
 
+The development Compose profile derives `APP_URL`, `FRONTEND_URL`, and the additional Sanctum/CORS origin from the published `APP_PORT`. This keeps a custom port such as `18080` stateful without requiring four synchronized edits. Anonymous authentication and recovery mutations also require an installed session store before reaching their controllers; an omitted or untrusted origin therefore fails closed with Problem Details `419` instead of mutating account state or raising an internal error. The production overlay replaces these derived local values with explicit deployment settings. Rendered development and production Compose configurations are contract-tested before the test, quality, and E2E suites.
+
 Laravel's password hashing, signed email verification, and hashed password-reset tokens are used. Login and recovery endpoints are rate-limited. Export and deletion endpoints require a verified email and a recent password confirmation established by a JSON reauthentication endpoint. Account deletion is synchronous: it removes owned receipt objects first, then deletes database sessions and the user within the relational transaction/cascade path, and finally invalidates the current request session.
 
 The SPA stores no access or refresh token in localStorage or sessionStorage. Personal access tokens and OAuth are outside the first release.

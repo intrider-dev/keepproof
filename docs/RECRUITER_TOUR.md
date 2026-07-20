@@ -96,6 +96,7 @@ Read the short ADRs under [`docs/adr`](adr/), especially:
 Then scan:
 
 - [Case Study](CASE_STUDY.md), including what failed during connected implementation.
+- [Testing Strategy](TESTING.md) for the critical-risk matrix and exact local evidence.
 - [Maintainer Notes](MAINTAINER_NOTES.md) for concise interview answers tied to code.
 - [Local Performance Baseline](performance/LOCAL_BASELINE.md) for reproducible, non-production measurements.
 - [CI workflow](../.github/workflows/ci.yml) and [artifact/SBOM workflow](../.github/workflows/artifacts.yml).
