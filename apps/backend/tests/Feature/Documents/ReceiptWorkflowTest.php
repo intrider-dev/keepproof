@@ -299,6 +299,9 @@ final class ReceiptWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.url', 'https://objects.keepproof.test/private-download');
 
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        self::assertStringContainsString('private', $cacheControl);
+        self::assertStringContainsString('no-store', $cacheControl);
         self::assertStringNotContainsString($document->storage_key, (string) $response->getContent());
         $expiresAt = $response->json('data.expires_at');
         self::assertIsString($expiresAt);

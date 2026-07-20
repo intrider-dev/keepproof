@@ -83,7 +83,7 @@ final class ReceiptDocumentController extends Controller
                 'url' => $url,
                 'expires_at' => $expiresAt->toAtomString(),
             ],
-        ]);
+        ])->header('Cache-Control', 'private, no-store');
     }
 
     private function downloadFilename(ReceiptDocument $document): string
