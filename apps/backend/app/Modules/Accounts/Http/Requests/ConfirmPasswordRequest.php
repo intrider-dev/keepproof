@@ -18,4 +18,9 @@ final class ConfirmPasswordRequest extends FormRequest
     {
         return ['password' => ['required', 'string']];
     }
+
+    public function password(): string
+    {
+        return $this->safe()->string('password')->toString();
+    }
 }

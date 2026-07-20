@@ -6,10 +6,26 @@ namespace App\Modules\Households\Models;
 
 use App\Modules\Accounts\Models\User;
 use App\Modules\Households\Enums\HouseholdRole;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property string $id
+ * @property string $household_id
+ * @property string $invited_by_user_id
+ * @property string $email
+ * @property HouseholdRole $role
+ * @property string $token_hash
+ * @property CarbonImmutable $expires_at
+ * @property CarbonImmutable|null $accepted_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Household $household
+ * @property-read User $invitedBy
+ */
 final class HouseholdInvitation extends Model
 {
     use HasUlids;

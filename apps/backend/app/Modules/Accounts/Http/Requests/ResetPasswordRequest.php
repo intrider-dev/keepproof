@@ -24,6 +24,19 @@ final class ResetPasswordRequest extends FormRequest
         ];
     }
 
+    /** @return array{email: string, password: string, password_confirmation: string, token: string} */
+    public function credentials(): array
+    {
+        $validated = $this->safe();
+
+        return [
+            'email' => $validated->string('email')->toString(),
+            'password' => $validated->string('password')->toString(),
+            'password_confirmation' => $validated->string('password_confirmation')->toString(),
+            'token' => $validated->string('token')->toString(),
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('email'))) {

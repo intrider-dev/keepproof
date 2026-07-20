@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounts\Http\Requests;
 
 use App\Modules\Accounts\Models\User;
+use App\Modules\Accounts\Support\SupportedLocales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,8 +30,23 @@ final class UpdateProfileRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($this->user()?->getKey()),
             ],
             'timezone' => ['sometimes', 'required', 'string', 'timezone:all'],
-            'locale' => ['sometimes', 'required', 'string', Rule::in(config('app.supported_locales'))],
+            'locale' => ['sometimes', 'required', 'string', Rule::in(SupportedLocales::all())],
         ];
+    }
+
+    /** @return array{name?: string, email?: string, timezone?: string, locale?: string} */
+    public function payload(): array
+    {
+        $validated = $this->safe();
+        $payload = [];
+
+        foreach (['name', 'email', 'timezone', 'locale'] as $field) {
+            if ($validated->has($field)) {
+                $payload[$field] = $validated->string($field)->toString();
+            }
+        }
+
+        return $payload;
     }
 
     protected function prepareForValidation(): void

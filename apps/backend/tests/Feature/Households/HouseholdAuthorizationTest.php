@@ -69,12 +69,29 @@ final class HouseholdAuthorizationTest extends TestCase
             'email' => ' MEMBER@Example.com ',
         ])->assertCreated()->assertJsonPath('data.email', 'member@example.com');
 
-        $invitationId = (string) $response->json('data.id');
+        $invitationId = $response->json('data.id');
+
+        if (! is_string($invitationId)) {
+            self::fail('The invitation response must contain a string identifier.');
+        }
+
         Notification::assertSentOnDemand(
             HouseholdInvitationNotification::class,
             function (HouseholdInvitationNotification $notification) use (&$token): bool {
-                parse_str((string) parse_url($notification->acceptUrl(), PHP_URL_QUERY), $query);
-                $token = (string) ($query['token'] ?? '');
+                $queryString = parse_url($notification->acceptUrl(), PHP_URL_QUERY);
+
+                if (! is_string($queryString)) {
+                    return false;
+                }
+
+                parse_str($queryString, $query);
+                $parsedToken = $query['token'] ?? null;
+
+                if (! is_string($parsedToken)) {
+                    return false;
+                }
+
+                $token = $parsedToken;
 
                 return $token !== '';
             },

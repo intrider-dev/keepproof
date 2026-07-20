@@ -18,4 +18,9 @@ final class AcceptHouseholdInvitationRequest extends FormRequest
     {
         return ['token' => ['required', 'string', 'min:40', 'max:128']];
     }
+
+    public function token(): string
+    {
+        return $this->safe()->string('token')->toString();
+    }
 }

@@ -22,7 +22,7 @@ As a monorepo path dependency:
     { "type": "path", "url": "../../packages/deadline-engine" }
   ],
   "require": {
-    "keepproof/deadline-engine": "@dev"
+    "keepproof/deadline-engine": "dev-main"
   }
 }
 ```

@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use LogicException;
 use Symfony\Component\HttpFoundation\Response;
 
 final class AssignCorrelationId
@@ -23,6 +24,11 @@ final class AssignCorrelationId
         Log::withContext(['correlation_id' => $correlationId]);
 
         $response = $next($request);
+
+        if (! $response instanceof Response) {
+            throw new LogicException('HTTP middleware must return a Symfony response.');
+        }
+
         $response->headers->set('X-Correlation-ID', $correlationId);
 
         return $response;

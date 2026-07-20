@@ -19,6 +19,11 @@ final class ForgotPasswordRequest extends FormRequest
         return ['email' => ['required', 'string', 'email:strict', 'max:255']];
     }
 
+    public function email(): string
+    {
+        return $this->safe()->string('email')->toString();
+    }
+
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('email'))) {

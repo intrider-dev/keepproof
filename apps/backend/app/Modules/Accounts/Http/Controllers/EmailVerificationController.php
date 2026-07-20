@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Accounts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Accounts\Models\User;
 use App\Modules\Shared\Audit\AuditRecorder;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
@@ -15,8 +14,7 @@ final class EmailVerificationController extends Controller
 {
     public function resend(Request $request): Response
     {
-        /** @var User $user */
-        $user = $request->user();
+        $user = $this->authenticatedUser($request);
 
         if (! $user->hasVerifiedEmail()) {
             $user->sendEmailVerificationNotification();
@@ -27,11 +25,10 @@ final class EmailVerificationController extends Controller
 
     public function verify(Request $request, string $id, string $hash, AuditRecorder $audit): Response
     {
-        /** @var User $user */
-        $user = $request->user();
+        $user = $this->authenticatedUser($request);
 
         abort_unless(
-            hash_equals((string) $user->getKey(), $id)
+            hash_equals($user->id, $id)
             && hash_equals(sha1($user->getEmailForVerification()), $hash),
             Response::HTTP_FORBIDDEN,
         );

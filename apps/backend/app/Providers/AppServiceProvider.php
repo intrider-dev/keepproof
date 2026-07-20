@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers;
 
 use App\Modules\Accounts\Models\User;
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Policies\HouseholdPolicy;
+use App\Modules\Shared\Configuration\FrontendUrl;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -48,23 +51,57 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('auth.login', static fn (Request $request): Limit => Limit::perMinute(5)->by(
-            Str::lower(trim((string) $request->input('email'))).'|'.$request->ip(),
+            self::emailThrottleKey($request),
         ));
         RateLimiter::for('auth.register', static fn (Request $request): Limit => Limit::perMinute(5)->by(
-            (string) $request->ip(),
+            self::requestIp($request),
         ));
         RateLimiter::for('auth.password', static fn (Request $request): Limit => Limit::perMinute(3)->by(
-            Str::lower(trim((string) $request->input('email'))).'|'.$request->ip(),
+            self::emailThrottleKey($request),
         ));
         RateLimiter::for('api', static fn (Request $request): Limit => Limit::perMinute(120)->by(
-            (string) ($request->user()?->getAuthIdentifier() ?? $request->ip()),
+            self::apiThrottleKey($request),
         ));
 
-        ResetPassword::createUrlUsing(static fn (User $user, string $token): string => sprintf(
-            '%s/reset-password?token=%s&email=%s',
-            rtrim((string) config('app.frontend_url'), '/'),
-            rawurlencode($token),
-            rawurlencode($user->email),
-        ));
+        ResetPassword::createUrlUsing(static function (mixed $notifiable, string $token): string {
+            if (! $notifiable instanceof User) {
+                throw new \LogicException('Password reset notifications require the KeepProof user model.');
+            }
+
+            return sprintf(
+                '%s/reset-password?token=%s&email=%s',
+                FrontendUrl::base(),
+                rawurlencode($token),
+                rawurlencode($notifiable->email),
+            );
+        });
+    }
+
+    private static function emailThrottleKey(Request $request): string
+    {
+        $email = $request->input('email');
+        $normalized = is_string($email) ? Str::lower(trim($email)) : 'invalid-email';
+
+        return $normalized.'|'.self::requestIp($request);
+    }
+
+    private static function apiThrottleKey(Request $request): string
+    {
+        $identifier = $request->user()?->getAuthIdentifier();
+
+        if (is_string($identifier)) {
+            return $identifier;
+        }
+
+        if (is_int($identifier)) {
+            return (string) $identifier;
+        }
+
+        return self::requestIp($request);
+    }
+
+    private static function requestIp(Request $request): string
+    {
+        return $request->ip() ?? 'unknown-ip';
     }
 }

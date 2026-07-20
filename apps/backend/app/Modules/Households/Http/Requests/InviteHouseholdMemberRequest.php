@@ -24,6 +24,11 @@ final class InviteHouseholdMemberRequest extends FormRequest
         ];
     }
 
+    public function email(): string
+    {
+        return $this->safe()->string('email')->toString();
+    }
+
     protected function prepareForValidation(): void
     {
         $updates = ['role' => $this->input('role', HouseholdRole::Member->value)];

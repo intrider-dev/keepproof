@@ -22,12 +22,13 @@ final class AuthenticationController extends Controller
 {
     public function register(RegisterRequest $request, RegisterAccount $register): JsonResponse
     {
+        $payload = $request->payload();
         $user = $register->execute(
-            name: (string) $request->validated('name'),
-            email: (string) $request->validated('email'),
-            password: (string) $request->validated('password'),
-            timezone: (string) $request->validated('timezone'),
-            locale: (string) $request->validated('locale'),
+            name: $payload->name,
+            email: $payload->email,
+            password: $payload->password,
+            timezone: $payload->timezone,
+            locale: $payload->locale,
         );
 
         event(new Registered($user));
@@ -42,10 +43,7 @@ final class AuthenticationController extends Controller
     /** @throws ValidationException */
     public function login(LoginRequest $request, AuditRecorder $audit): UserResource
     {
-        $authenticated = Auth::guard('web')->attempt([
-            'email' => (string) $request->validated('email'),
-            'password' => (string) $request->validated('password'),
-        ]);
+        $authenticated = Auth::guard('web')->attempt($request->credentials());
 
         if (! $authenticated) {
             throw ValidationException::withMessages([
@@ -55,8 +53,12 @@ final class AuthenticationController extends Controller
 
         $request->session()->regenerate();
 
-        /** @var User $user */
         $user = Auth::guard('web')->user();
+
+        if (! $user instanceof User) {
+            throw new \LogicException('The web guard authenticated an unsupported user model.');
+        }
+
         $audit->record('account.logged_in', $user, subject: $user);
 
         return new UserResource($user->load('households'));
@@ -64,17 +66,13 @@ final class AuthenticationController extends Controller
 
     public function logout(Request $request, AuditRecorder $audit): Response
     {
-        /** @var User|null $user */
-        $user = $request->user();
-
-        if ($user !== null) {
-            $audit->record('account.logged_out', $user, subject: $user);
-        }
+        $user = $this->authenticatedUser($request);
+        $audit->record('account.logged_out', $user, subject: $user);
 
         Auth::guard('web')->logout();
-        Auth::guard('sanctum')->forgetUser();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+        Auth::forgetGuards();
 
         return response()->noContent();
     }

@@ -19,6 +19,11 @@ final class UpdateHouseholdRequest extends FormRequest
         return ['name' => ['required', 'string', 'max:120']];
     }
 
+    public function name(): string
+    {
+        return $this->safe()->string('name')->toString();
+    }
+
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('name'))) {

@@ -6,6 +6,7 @@ namespace App\Modules\Households\Notifications;
 
 use App\Modules\Households\Models\Household;
 use App\Modules\Households\Models\HouseholdInvitation;
+use App\Modules\Shared\Configuration\FrontendUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -40,7 +41,7 @@ final class HouseholdInvitationNotification extends Notification
     {
         return sprintf(
             '%s/invitations/%s?token=%s',
-            rtrim((string) config('app.frontend_url'), '/'),
+            FrontendUrl::base(),
             $this->invitation->id,
             rawurlencode($this->plainToken),
         );

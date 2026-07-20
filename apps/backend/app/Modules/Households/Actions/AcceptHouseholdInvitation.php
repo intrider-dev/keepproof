@@ -25,17 +25,21 @@ final readonly class AcceptHouseholdInvitation
                 ->lockForUpdate()
                 ->first();
 
-            $isAuthentic = $invitation !== null
-                && hash_equals($invitation->token_hash, hash('sha256', $plainToken))
-                && hash_equals($invitation->email, $user->email);
-
-            if (! $isAuthentic || ($invitation->accepted_at === null && $invitation->expires_at->isPast())) {
+            if ($invitation === null
+                || ! hash_equals($invitation->token_hash, hash('sha256', $plainToken))
+                || ! hash_equals($invitation->email, $user->email)
+            ) {
                 throw ValidationException::withMessages([
                     'invitation' => ['The invitation is invalid or has expired.'],
                 ]);
             }
 
-            /** @var HouseholdInvitation $invitation */
+            if ($invitation->accepted_at === null && $invitation->expires_at->isPast()) {
+                throw ValidationException::withMessages([
+                    'invitation' => ['The invitation is invalid or has expired.'],
+                ]);
+            }
+
             $household = $invitation->household()->firstOrFail();
             $membership = HouseholdMember::query()->firstOrCreate(
                 ['household_id' => $household->id, 'user_id' => $user->id],

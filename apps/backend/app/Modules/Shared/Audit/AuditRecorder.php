@@ -27,10 +27,29 @@ final readonly class AuditRecorder
             'household_id' => $household?->getKey(),
             'action' => $action,
             'subject_type' => $subject?->getMorphClass(),
-            'subject_id' => $subject === null ? null : (string) $subject->getKey(),
+            'subject_id' => $this->subjectId($subject),
             'correlation_id' => $this->request->attributes->get('correlation_id'),
             'metadata' => $metadata,
             'occurred_at' => now(),
         ]);
+    }
+
+    private function subjectId(?Model $subject): ?string
+    {
+        if ($subject === null) {
+            return null;
+        }
+
+        $identifier = $subject->getKey();
+
+        if (is_string($identifier)) {
+            return $identifier;
+        }
+
+        if (is_int($identifier)) {
+            return (string) $identifier;
+        }
+
+        throw new \LogicException('Audited models must have a string or integer identifier.');
     }
 }

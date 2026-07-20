@@ -22,6 +22,17 @@ final class LoginRequest extends FormRequest
         ];
     }
 
+    /** @return array{email: string, password: string} */
+    public function credentials(): array
+    {
+        $validated = $this->safe();
+
+        return [
+            'email' => $validated->string('email')->toString(),
+            'password' => $validated->string('password')->toString(),
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('email'))) {

@@ -22,7 +22,7 @@ final class PasswordController extends Controller
 {
     public function forgot(ForgotPasswordRequest $request): JsonResponse
     {
-        Password::sendResetLink(['email' => (string) $request->validated('email')]);
+        Password::sendResetLink(['email' => $request->email()]);
 
         return response()->json([
             'message' => 'If an account matches that email, a password reset link has been sent.',
@@ -33,7 +33,7 @@ final class PasswordController extends Controller
     public function reset(ResetPasswordRequest $request, AuditRecorder $audit): Response
     {
         $status = Password::reset(
-            $request->safe()->only(['email', 'password', 'password_confirmation', 'token']),
+            $request->credentials(),
             static function (User $user, string $password) use ($audit): void {
                 $user->forceFill([
                     'password' => $password,
@@ -57,10 +57,9 @@ final class PasswordController extends Controller
     /** @throws ValidationException */
     public function confirm(ConfirmPasswordRequest $request, AuditRecorder $audit): JsonResponse
     {
-        /** @var User $user */
-        $user = $request->user();
+        $user = $this->authenticatedUser($request);
 
-        if (! Hash::check((string) $request->validated('password'), $user->password)) {
+        if (! Hash::check($request->password(), $user->password)) {
             throw ValidationException::withMessages([
                 'password' => ['The password is incorrect.'],
             ]);
@@ -71,7 +70,22 @@ final class PasswordController extends Controller
         $audit->record('account.password_confirmed', $user, subject: $user);
 
         return response()->json([
-            'confirmed_until' => now()->addSeconds((int) config('auth.password_timeout'))->toAtomString(),
+            'confirmed_until' => now()->addSeconds($this->confirmationTimeout())->toAtomString(),
         ]);
+    }
+
+    private function confirmationTimeout(): int
+    {
+        $configured = config('auth.password_timeout');
+
+        if (is_int($configured) && $configured > 0) {
+            return $configured;
+        }
+
+        if (is_string($configured) && ctype_digit($configured) && $configured !== '0') {
+            return (int) $configured;
+        }
+
+        throw new \LogicException('The auth.password_timeout configuration must be a positive integer.');
     }
 }

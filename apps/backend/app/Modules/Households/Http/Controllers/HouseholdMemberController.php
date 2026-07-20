@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Households\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Accounts\Models\User;
 use App\Modules\Households\Enums\HouseholdRole;
 use App\Modules\Households\Http\Resources\HouseholdMemberResource;
 use App\Modules\Households\Models\Household;
@@ -45,8 +44,7 @@ final class HouseholdMemberController extends Controller
         }
 
         DB::transaction(function () use ($request, $household, $membership, $audit): void {
-            /** @var User $actor */
-            $actor = $request->user();
+            $actor = $this->authenticatedUser($request);
             $audit->record('household.member_removed', $actor, $household, $membership);
             $membership->delete();
         });
