@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "quality": "npm run format:check && npm run lint:api && npm run lint && npm run typecheck && npm run test:unit && npm run build",
+    "security": "npm audit --audit-level=high",
+    "quality": "npm run format:check && npm run lint:api && npm run lint && npm run typecheck && npm run test:unit && npm run build && npm run security",
     "generate:api": "openapi-ts -i ../backend/openapi/openapi.yaml -o src/api/generated",
     "lint:api": "redocly lint --config ../../redocly.yaml ../backend/openapi/openapi.yaml"
   },
