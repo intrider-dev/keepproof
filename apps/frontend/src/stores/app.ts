@@ -35,6 +35,34 @@ import type {
 
 const clone = <T>(value: T): T => structuredClone(value)
 
+const copyNotificationPreferences = (
+  preferences: NotificationPreferences,
+): NotificationPreferences => ({
+  inApp: preferences.inApp,
+  email: preferences.email,
+  reminderDays: [...preferences.reminderDays],
+  quietHours: preferences.quietHours,
+  quietFrom: preferences.quietFrom,
+  quietUntil: preferences.quietUntil,
+})
+
+const mapNotificationPreferences = (
+  preferences: NotificationPreferencesResponse['data'],
+): NotificationPreferences => {
+  const quietHours = Boolean(preferences.quiet_hours_start && preferences.quiet_hours_end)
+
+  return {
+    inApp: preferences.in_app_enabled,
+    email: preferences.email_enabled,
+    reminderDays: [
+      ...new Set([...preferences.return_intervals, ...preferences.warranty_intervals]),
+    ].sort((left, right) => right - left),
+    quietHours,
+    quietFrom: preferences.quiet_hours_start ?? '22:00',
+    quietUntil: preferences.quiet_hours_end ?? '07:00',
+  }
+}
+
 const state = reactive({
   isAuthenticated: false,
   demoMode: false,
@@ -329,7 +357,7 @@ const transferDemoOwnership = (memberId: string): void => {
 }
 
 const updateDemoPreferences = (preferences: NotificationPreferences): void => {
-  state.preferences = clone(preferences)
+  state.preferences = copyNotificationPreferences(preferences)
   showToast('Notification preferences saved.')
 }
 
@@ -676,17 +704,7 @@ const hydrateRemoteWorkspace = async (): Promise<void> => {
     readAt: notification.read_at,
     createdAt: notification.created_at,
   }))
-  const quietHours = Boolean(preferences.data.quiet_hours_start && preferences.data.quiet_hours_end)
-  state.preferences = {
-    inApp: preferences.data.in_app_enabled,
-    email: preferences.data.email_enabled,
-    reminderDays: [
-      ...new Set([...preferences.data.return_intervals, ...preferences.data.warranty_intervals]),
-    ].sort((left, right) => right - left),
-    quietHours,
-    quietFrom: preferences.data.quiet_hours_start ?? '22:00',
-    quietUntil: preferences.data.quiet_hours_end ?? '07:00',
-  }
+  state.preferences = mapNotificationPreferences(preferences.data)
 }
 
 const activateRemoteSession = async (response: SessionUserResponse): Promise<boolean> => {
@@ -875,7 +893,7 @@ const updatePreferences = async (preferences: NotificationPreferences): Promise<
     return
   }
 
-  await apiRequest<NotificationPreferencesResponse>('/notification-preferences', {
+  const response = await apiRequest<NotificationPreferencesResponse>('/notification-preferences', {
     method: 'PUT',
     body: JSON.stringify({
       in_app_enabled: preferences.inApp,
@@ -886,7 +904,7 @@ const updatePreferences = async (preferences: NotificationPreferences): Promise<
       quiet_hours_end: preferences.quietHours ? preferences.quietUntil : null,
     }),
   })
-  state.preferences = clone(preferences)
+  state.preferences = mapNotificationPreferences(response.data)
   showToast('Notification preferences saved.')
 }
 

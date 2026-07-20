@@ -1,5 +1,7 @@
+import { reactive } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UserResponse } from '../api/generated'
+import { resetCsrfForTests } from '../lib/api'
 import { appStore } from './app'
 
 const jsonResponse = (body: unknown): Response =>
@@ -29,10 +31,59 @@ const verifiedUser: UserResponse = {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  resetCsrfForTests()
   appStore.startDemo()
 })
 
 describe('connected application store', () => {
+  it('saves notification preferences passed from a reactive form and applies the server response', async () => {
+    resetCsrfForTests()
+    document.cookie = 'XSRF-TOKEN=notification-csrf-token; path=/'
+    appStore.startDemo()
+    appStore.state.demoMode = false
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            in_app_enabled: true,
+            email_enabled: false,
+            return_intervals: [14, 7],
+            warranty_intervals: [30, 14],
+            quiet_hours_start: '23:00',
+            quiet_hours_end: '06:30',
+            timezone: 'America/New_York',
+          },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      appStore.updatePreferences(
+        reactive({
+          inApp: true,
+          email: false,
+          reminderDays: [14, 7],
+          quietHours: true,
+          quietFrom: '23:00',
+          quietUntil: '06:30',
+        }),
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(appStore.state.preferences).toEqual({
+      inApp: true,
+      email: false,
+      reminderDays: [30, 14, 7],
+      quietHours: true,
+      quietFrom: '23:00',
+      quietUntil: '06:30',
+    })
+    expect(appStore.toast.value?.message).toBe('Notification preferences saved.')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('hydrates tenant-scoped workspace data from the API contract', async () => {
     const householdId = verifiedUser.data.households[0]!.id
     const purchaseId = '01K00000000000000000000003'
