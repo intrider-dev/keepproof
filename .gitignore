@@ -6,6 +6,7 @@
 /.vscode/
 /.phpunit.cache/
 /output/playwright/
+/output/playwright-report/
 
 /apps/backend/.env
 /apps/backend/.env.*

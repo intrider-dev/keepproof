@@ -1,0 +1,5 @@
+dist
+coverage
+src/api/generated
+../../output
+package-lock.json
