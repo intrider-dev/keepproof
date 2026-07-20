@@ -49,6 +49,18 @@
         "security": "@composer audit --locked --no-interaction",
         "test": [
             "@putenv APP_ENV=testing",
+            "@putenv APP_URL=http://localhost",
+            "@putenv FRONTEND_URL=http://localhost:5173",
+            "@putenv DB_CONNECTION=sqlite",
+            "@putenv DB_DATABASE=:memory:",
+            "@putenv CACHE_STORE=array",
+            "@putenv QUEUE_CONNECTION=sync",
+            "@putenv SESSION_DRIVER=array",
+            "@putenv MAIL_MAILER=array",
+            "@putenv BROADCAST_CONNECTION=null",
+            "@putenv FILESYSTEM_DISK=local",
+            "@putenv RECEIPT_DISK=local",
+            "@putenv OCR_DRIVER=fixture",
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],
