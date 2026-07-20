@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import authProofJourneyUrl from '../assets/auth-proof-journey.webp'
 import BrandMark from '../components/BrandMark.vue'
 import AppIcon from '../components/AppIcon.vue'
 import type { UserResponse } from '../api/generated'
@@ -162,6 +163,9 @@ const submit = async (): Promise<void> => {
     </section>
     <aside class="auth-story auth-story--steps" aria-label="What happens next">
       <p class="eyebrow">What happens next</p>
+      <div class="auth-story__visual" aria-hidden="true">
+        <img :src="authProofJourneyUrl" alt="" width="1200" height="800" decoding="async" />
+      </div>
       <ol>
         <li>
           <span>1</span>

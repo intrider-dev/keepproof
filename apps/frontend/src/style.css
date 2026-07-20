@@ -1359,16 +1359,49 @@ ol {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
+  padding-block: clamp(38px, 5vh, 68px);
   padding-inline: clamp(40px, 8vw, 120px);
 }
 
+.auth-story--steps > .eyebrow,
+.auth-story__visual,
 .auth-story--steps ol {
   position: relative;
   z-index: 1;
+  width: min(100%, 520px);
+}
+
+.auth-story__visual {
+  height: clamp(180px, 29vh, 280px);
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid rgb(255 253 248 / 72%);
+  border-radius: 20px;
+  background: #e6e8dc;
+  box-shadow: 0 22px 54px rgb(45 68 51 / 14%);
+}
+
+.auth-story__visual::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(46 72 52 / 6%);
+  content: '';
+  pointer-events: none;
+}
+
+.auth-story__visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-story--steps ol {
   display: grid;
-  gap: 36px;
+  gap: clamp(18px, 2.6vh, 30px);
   max-width: 460px;
-  margin-top: 38px;
+  margin-top: 28px;
   padding: 0;
   list-style: none;
 }
