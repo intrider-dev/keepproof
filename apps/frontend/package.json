@@ -19,8 +19,8 @@
     "test:e2e": "playwright test",
     "security": "npm audit --audit-level=high",
     "quality": "npm run format:check && npm run lint:api && npm run check:api && npm run lint && npm run typecheck && npm run test:unit && npm run build && npm run security",
-    "generate:api": "openapi-ts -i ../backend/openapi/openapi.yaml -o src/api/generated",
-    "check:api": "npm run generate:api && git diff --exit-code -- src/api/generated",
+    "generate:api": "node scripts/generate-api.mjs",
+    "check:api": "node scripts/generate-api.mjs --check",
     "lint:api": "redocly lint --config ../../redocly.yaml ../backend/openapi/openapi.yaml"
   },
   "dependencies": {
