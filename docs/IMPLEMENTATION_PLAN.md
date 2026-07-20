@@ -1,6 +1,6 @@
 # KeepProof Implementation Plan
 
-Status: active delivery plan
+Status: locally verified release candidate
 Last updated: 2026-07-20
 
 ## Outcome
@@ -38,17 +38,17 @@ This plan is an execution contract, not a claim that a phase already passes. A p
 
 The initial implementation is pinned to the following mutually compatible baseline. Dependency changes require a reviewed pull request, successful quality gates, and an ADR amendment when they alter an architectural decision.
 
-| Component | Version | Role |
-| --- | ---: | --- |
-| PHP | 8.5.8 | Backend runtime and deadline package |
-| Laravel | 13.20 | API, authentication, queues, scheduling, and mail |
-| PostgreSQL | 18.4 | Primary transactional database |
-| Redis | 8.2.7 | Queues, non-authoritative locks, and cache |
-| Node.js | 24.18 | Frontend toolchain runtime |
-| Vue | 3.5.40 | SPA framework |
-| TypeScript | 6 | Strict frontend type system |
-| Vite | 8.1.5 | Frontend development and production build |
-| SeaweedFS | 4.39 | Local private S3-compatible object storage |
+| Component  | Version | Role                                              |
+| ---------- | ------: | ------------------------------------------------- |
+| PHP        |   8.5.8 | Backend runtime and deadline package              |
+| Laravel    |   13.20 | API, authentication, queues, scheduling, and mail |
+| PostgreSQL |    18.4 | Primary transactional database                    |
+| Redis      |   8.2.7 | Queues, non-authoritative locks, and cache        |
+| Node.js    |   24.18 | Frontend toolchain runtime                        |
+| Vue        |  3.5.40 | SPA framework                                     |
+| TypeScript |       6 | Strict frontend type system                       |
+| Vite       |   8.1.5 | Frontend development and production build         |
+| SeaweedFS  |    4.39 | Local private S3-compatible object storage        |
 
 Exact image digests and JavaScript lockfile resolutions are recorded in infrastructure and lock files. Versions are not advanced merely to obtain a larger version number.
 
@@ -141,7 +141,7 @@ Acceptance gate:
 Deliverables:
 
 - Draft and active purchases, items, integer money, retailer terms, manual overrides, filters, pagination, and search indexes.
-- Secure JPEG, PNG, and PDF uploads with content-derived MIME detection, size/page/pixel limits, safe names, and image metadata removal.
+- Secure JPEG, PNG, and PDF uploads with content-derived MIME detection, size/pixel limits, safe names, image metadata removal, active-PDF marker rejection, and a bounded three-page local OCR budget.
 - Private SeaweedFS objects with opaque keys and short-lived signed download URLs.
 - Controlled document state machine and immutable transition journal.
 - Upload idempotency and compensating cleanup for object/database boundary failures.
@@ -190,11 +190,11 @@ Acceptance gate:
 
 Deliverables:
 
-- In-app and email reminders generated from versioned deadlines and user intervals.
+- In-app and email reminders generated from confirmed deadline snapshots and user intervals.
 - Database uniqueness, atomic claims, bounded retries, and a delivery-unknown state for ambiguous SMTP outcomes.
 - ICS download, claim ZIP with structured data and available receipt files, account export, and owner-only household export.
 - Recent-password protection and audit events for bulk export and account deletion.
-- Idempotent account-deletion workflow that removes private objects before database identities and blocks unsafe deletion of a shared owned household.
+- Synchronous account deletion that removes private objects before database identities, fails closed on a storage error, and blocks unsafe deletion of a shared owned household.
 - Backup, restore, migration, and demo-reset procedures.
 
 Acceptance gate:
@@ -202,8 +202,8 @@ Acceptance gate:
 - Reminder scheduling, timezone, quiet-hour behavior if enabled, and deduplication tests pass.
 - ICS parses in a standards-aware test.
 - Claim and account archives contain the documented data and no data from an unauthorized household.
-- Export URLs expire and are absent from logs.
-- Account deletion removes every indexed object and relational record covered by the request, including retry after an injected partial failure.
+- Streamed archives and signed receipt links are authorized at request time; signed receipt links are short-lived, `no-store`, and absent from logs.
+- Account deletion removes every indexed object and relational record covered by the request. An injected storage failure leaves the relational identity intact so the user can retry safely.
 
 ## Phase 7 — Security and failure testing
 
@@ -253,6 +253,19 @@ Stretch work begins only after Phase 8 passes in full. Priority is:
 
 Until then, each stretch item is an issue with acceptance criteria and no partial runtime code.
 
-## Release evidence
+## Verified release-candidate evidence — 2026-07-20
 
-The release report must list exact commands and exit results, local URLs, synthetic demo credentials, measured coverage where available, and any failing or skipped check. KeepProof should be described as a production-oriented portfolio project. Real operation would additionally require managed secrets and backups, recovery exercises, monitored email delivery, storage durability validation, malware controls appropriate to the threat model, incident response, and jurisdiction-specific privacy review.
+| Gate                 | Result                                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean environment    | `reset` followed by `setup` passed in 188.4 seconds, including fresh dependencies, PostgreSQL migrations, and private-storage preparation.                                                                    |
+| Synthetic demo       | `demo` passed in 68.1 seconds and left every required service healthy.                                                                                                                                        |
+| Quality              | Passed in 69.7 seconds: backend 82 tests / 585 assertions, Deadline Engine 34 / 46,276, frontend 7 files / 22 tests, formatters, strict static analysis, OpenAPI/client drift, builds, and dependency audits. |
+| Unit/feature suites  | The standalone root test command passed in 41.2 seconds.                                                                                                                                                      |
+| Browser E2E          | The post-clean run passed 9/9 tests in 33.4 seconds; the connected lifecycle took 12.3 seconds and the complete wrapper took 70.5 seconds.                                                                    |
+| Production artifacts | Backend and frontend images built; non-root Nginx passed `nginx -t`; an ephemeral production-ingress request returned HTTP 200.                                                                               |
+| Compose validation   | Development and production-overlay configurations passed `docker compose config --quiet`.                                                                                                                     |
+| Local load baseline  | The authenticated dashboard and private-upload probe completed without failures; full environment and measurements are in [`performance/LOCAL_BASELINE.md`](performance/LOCAL_BASELINE.md).                   |
+
+No coverage percentage is reported because coverage was not collected. The repository has no configured GitHub origin, so the defined workflows have not been claimed as remotely executed, and no public deployment or release tag has been created.
+
+KeepProof is a production-oriented portfolio project. Real operation would additionally require managed secrets and backups, recovery exercises, monitored email delivery, storage durability validation, malware controls appropriate to the threat model, incident response, and jurisdiction-specific privacy review.

@@ -22,7 +22,7 @@ Cookie policy is:
 
 The local HTTP profile may disable Secure only in its documented environment override. CORS uses an exact allowlist and credentialed requests; wildcard origins are forbidden.
 
-Laravel's password hashing, signed email verification, and hashed password-reset tokens are used. Login and recovery endpoints are rate-limited. Export and deletion endpoints require a verified email and a recent password confirmation established by a JSON reauthentication endpoint. Account deletion revokes all sessions before asynchronous erasure continues.
+Laravel's password hashing, signed email verification, and hashed password-reset tokens are used. Login and recovery endpoints are rate-limited. Export and deletion endpoints require a verified email and a recent password confirmation established by a JSON reauthentication endpoint. Account deletion is synchronous: it removes owned receipt objects first, then deletes database sessions and the user within the relational transaction/cascade path, and finally invalidates the current request session.
 
 The SPA stores no access or refresh token in localStorage or sessionStorage. Personal access tokens and OAuth are outside the first release.
 

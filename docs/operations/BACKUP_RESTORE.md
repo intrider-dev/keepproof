@@ -20,55 +20,55 @@ The commands below assume the default Compose project and local-only credentials
 
 1. Confirm the exact project and destination. The destination must be outside a directory removed by `make reset`.
 
-   ```bash
-   docker compose ps
-   mkdir -p backups/keepproof-local
-   git rev-parse HEAD
-   ```
+    ```bash
+    docker compose ps
+    mkdir -p backups/keepproof-local
+    git rev-parse HEAD
+    ```
 
 2. Stop application writers, then let any in-flight PostgreSQL operation finish.
 
-   ```bash
-   docker compose stop nginx frontend backend scheduler queue-worker
-   ```
+    ```bash
+    docker compose stop nginx frontend backend scheduler queue-worker
+    ```
 
 3. Create a custom-format database dump inside the PostgreSQL container and copy it out.
 
-   ```bash
-   docker compose exec -T postgres pg_dump \
-     --username=keepproof \
-     --dbname=keepproof \
-     --format=custom \
-     --file=/tmp/keepproof.dump
-   docker compose cp postgres:/tmp/keepproof.dump backups/keepproof-local/database.dump
-   docker compose exec -T postgres rm -f /tmp/keepproof.dump
-   ```
+    ```bash
+    docker compose exec -T postgres pg_dump \
+      --username=keepproof \
+      --dbname=keepproof \
+      --format=custom \
+      --file=/tmp/keepproof.dump
+    docker compose cp postgres:/tmp/keepproof.dump backups/keepproof-local/database.dump
+    docker compose exec -T postgres rm -f /tmp/keepproof.dump
+    ```
 
 4. Stop object storage and copy its data directory. This physical copy is specific to the pinned local SeaweedFS layout; use the provider's supported snapshot/export mechanism in production.
 
-   ```bash
-   docker compose stop object-storage
-   mkdir -p backups/keepproof-local/object-storage
-   docker compose cp object-storage:/data/. backups/keepproof-local/object-storage/
-   ```
+    ```bash
+    docker compose stop object-storage
+    mkdir -p backups/keepproof-local/object-storage
+    docker compose cp object-storage:/data/. backups/keepproof-local/object-storage/
+    ```
 
 5. Record metadata and checksums. On macOS use `shasum -a 256` if `sha256sum` is unavailable.
 
-   ```bash
-   git rev-parse HEAD > backups/keepproof-local/git-revision.txt
-   docker compose exec -T postgres postgres --version > backups/keepproof-local/postgres-version.txt
-   (cd backups/keepproof-local && \
-     find . -type f ! -name SHA256SUMS -print0 \
-       | sort -z \
-       | xargs -0 sha256sum > SHA256SUMS)
-   ```
+    ```bash
+    git rev-parse HEAD > backups/keepproof-local/git-revision.txt
+    docker compose exec -T postgres postgres --version > backups/keepproof-local/postgres-version.txt
+    (cd backups/keepproof-local && \
+      find . -type f ! -name SHA256SUMS -print0 \
+        | sort -z \
+        | xargs -0 sha256sum > SHA256SUMS)
+    ```
 
 6. Restart services and verify readiness.
 
-   ```bash
-   docker compose up --detach --wait
-   curl --fail http://localhost:8080/health/ready
-   ```
+    ```bash
+    docker compose up --detach --wait
+    curl --fail http://localhost:8080/health/ready
+    ```
 
 Do not commit the `backups/` directory. It may contain all private application data even when the original demo was synthetic.
 
@@ -78,60 +78,60 @@ Restore is destructive to the selected Compose project's data. Before continuing
 
 1. Verify backup checksums from the directory that contains `SHA256SUMS`.
 
-   ```bash
-   cd backups/keepproof-local
-   sha256sum --check SHA256SUMS
-   cd ../..
-   ```
+    ```bash
+    cd backups/keepproof-local
+    sha256sum --check SHA256SUMS
+    cd ../..
+    ```
 
 2. Remove only KeepProof's named development volumes, recreate infrastructure, and confirm container health.
 
-   ```bash
-   make reset
-   docker compose up --detach --wait postgres redis object-storage
-   ```
+    ```bash
+    make reset
+    docker compose up --detach --wait postgres redis object-storage
+    ```
 
 3. Stop object storage, copy its saved data, then start it again.
 
-   ```bash
-   docker compose stop object-storage
-   docker compose cp backups/keepproof-local/object-storage/. object-storage:/data/
-   docker compose start object-storage
-   ```
+    ```bash
+    docker compose stop object-storage
+    docker compose cp backups/keepproof-local/object-storage/. object-storage:/data/
+    docker compose start object-storage
+    ```
 
 4. Copy and restore the PostgreSQL dump. `--clean --if-exists` replaces objects in the newly created local database.
 
-   ```bash
-   docker compose cp backups/keepproof-local/database.dump postgres:/tmp/keepproof.dump
-   docker compose exec -T postgres pg_restore \
-     --username=keepproof \
-     --dbname=keepproof \
-     --clean \
-     --if-exists \
-     --no-owner \
-     --no-privileges \
-     /tmp/keepproof.dump
-   docker compose exec -T postgres rm -f /tmp/keepproof.dump
-   ```
+    ```bash
+    docker compose cp backups/keepproof-local/database.dump postgres:/tmp/keepproof.dump
+    docker compose exec -T postgres pg_restore \
+      --username=keepproof \
+      --dbname=keepproof \
+      --clean \
+      --if-exists \
+      --no-owner \
+      --no-privileges \
+      /tmp/keepproof.dump
+    docker compose exec -T postgres rm -f /tmp/keepproof.dump
+    ```
 
 5. Restore the original `APP_KEY` through the environment's secret mechanism. Build the application without running `make setup`, because `make setup` intentionally generates a fresh local key. Install dependencies, apply forward-compatible migrations, and inspect status.
 
-   ```bash
-   docker compose build backend frontend
-   docker compose run --rm backend composer install --no-interaction --prefer-dist
-   docker compose run --rm frontend npm ci
-   docker compose run --rm backend php artisan migrate --force --isolated
-   docker compose run --rm backend php artisan migrate:status
-   make up
-   ```
+    ```bash
+    docker compose build backend frontend
+    docker compose run --rm backend composer install --no-interaction --prefer-dist
+    docker compose run --rm frontend npm ci
+    docker compose run --rm backend php artisan migrate --force --isolated
+    docker compose run --rm backend php artisan migrate:status
+    make up
+    ```
 
 6. Validate the restore using synthetic or authorized data only:
 
-   ```bash
-   curl --fail http://localhost:8080/health/live
-   curl --fail http://localhost:8080/health/ready
-   make test
-   ```
+    ```bash
+    curl --fail http://localhost:8080/health/live
+    curl --fail http://localhost:8080/health/ready
+    make test
+    ```
 
 Then sign in, inspect record counts, download at least one authorized receipt, verify that a foreign household cannot access it, and exercise one queued extraction/reminder operation. Record elapsed restore time and any manual intervention; that measured drill establishes the environment's real RTO.
 

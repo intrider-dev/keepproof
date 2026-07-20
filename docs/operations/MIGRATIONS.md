@@ -18,12 +18,12 @@ KeepProof uses Laravel migrations against PostgreSQL. Production migrations are 
 1. Identify the exact commit/image and review every new migration plus its rollback behavior.
 2. Run the complete quality suite and a clean-database migration:
 
-   ```bash
-   make quality
-   make test
-   make e2e
-   docker compose run --rm backend php artisan migrate:fresh --seed --force
-   ```
+    ```bash
+    make quality
+    make test
+    make e2e
+    docker compose run --rm backend php artisan migrate:fresh --seed --force
+    ```
 
 3. Test the upgrade from a representative backup, including workers and the previous application version where rolling compatibility matters.
 4. Estimate table size, lock duration, temporary disk usage, and backfill time in a production-like dataset. Do not invent estimates from the demo dataset.

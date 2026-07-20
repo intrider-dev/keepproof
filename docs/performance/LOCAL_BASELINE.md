@@ -34,10 +34,10 @@ Implementation: [`tests/load/run.mjs`](../../tests/load/run.mjs)
 - Read dataset at measurement time: one tenant with four purchases, two receipt documents, active deadlines, reminders, and one review item from `DemoDatasetSeeder`
 - Upload fixture: synthetic 8,809-byte PNG; no personal data
 
-| Scenario | Requests | Concurrency | Failures | Throughput | Latency min / avg / p50 / p95 / max |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Authenticated dashboard read | 50 | 5 | 0 | 15.52 req/s | 64.7 / 309.5 / 314.4 / 366.8 / 369.9 ms |
-| Private receipt upload accepted | 5 | 1 | 0 | 7.18 req/s | 98.7 / 139.3 / 107.4 / 261.6 / 261.6 ms |
+| Scenario                        | Requests | Concurrency | Failures |  Throughput | Latency min / avg / p50 / p95 / max     |
+| ------------------------------- | -------: | ----------: | -------: | ----------: | --------------------------------------- |
+| Authenticated dashboard read    |       50 |           5 |        0 | 15.52 req/s | 64.7 / 309.5 / 314.4 / 366.8 / 369.9 ms |
+| Private receipt upload accepted |        5 |           1 |        0 |  7.18 req/s | 98.7 / 139.3 / 107.4 / 261.6 / 261.6 ms |
 
 Measured scenario durations were 3,220.7 ms and 696.7 ms respectively. The complete `kp.ps1 load` command also built service readiness, migrations, storage preparation, and seeding into its 73.5-second wall time; that setup time is not part of the request metrics.
 

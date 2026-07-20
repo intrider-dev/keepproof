@@ -15,16 +15,14 @@ Extraction results enter the needs_review document state and remain separate fro
 
 No extracted deadline becomes active and no reminder is scheduled until an authorized household member submits an explicit confirmation. Confirmation:
 
-1. Locks the document, extraction run, and purchase.
-2. Validates that the run is current and the document is in needs_review.
-3. Records accepted values and corrections.
-4. Applies authoritative purchase data.
-5. Calls the deadline engine.
-6. Persists versioned deadline explanations.
-7. Reconciles reminder schedules.
-8. Transitions the document to ready and records an audit event.
+1. Validates that the document is in `needs_review`.
+2. Applies authoritative purchase data and replaces its items.
+3. Calls the Deadline Engine and snapshots each date, source, rule summary, and trace.
+4. Reconciles reminder schedules.
+5. Records accepted field values and corrections.
+6. Locks the document during its controlled transition to `ready` and records an audit event.
 
-These writes occur in one database transaction and the endpoint requires an idempotency key. A validation or persistence failure rolls back the entire confirmation.
+These writes occur in one database transaction and the endpoint requires an idempotency key backed by a unique database record. Concurrent confirmation that loses the final state transition rolls back its complete transaction. A validation or persistence failure also rolls back the entire confirmation.
 
 A user-created manual purchase is activated by its explicit save/confirm action and does not require a synthetic OCR review.
 

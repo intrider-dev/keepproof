@@ -15,16 +15,15 @@ Use Laravel Filesystem's S3 adapter against a private bucket. Local Compose pins
 
 Object keys are generated exclusively by the application:
 
-- documents/{shard}/{document-ulid}/{random-value}.{trusted-extension}
-- exports/{export-ulid}/{random-value}.zip
+- households/{household-ulid}/receipts/{document-ulid}/{random-value}.{trusted-extension}
 
-Keys and object metadata contain no email, merchant, original filename, or user-controlled path. The original display name is sanitized and stored only in PostgreSQL.
+Keys and object metadata contain no email, merchant, original filename, or user-controlled path. Household/document ULIDs provide application scope without personal labels. The original display name is sanitized and stored only in PostgreSQL.
 
-Uploads pass through the backend so it can enforce size, content-derived MIME, pixel/page limits, image re-encoding and metadata removal, PDF structural checks, and SHA-256 calculation. Only JPEG, PNG, and PDF are accepted. Objects are private and quarantined documents are never downloadable.
+Uploads pass through the backend so it can enforce a 10 MiB limit, content-derived MIME, image dimensions/pixel count, image re-encoding and metadata removal, and SHA-256 calculation. Only JPEG, PNG, and PDF are accepted. The worker rechecks the checksum and content signature, rejects known active/embedded PDF markers, and limits local PDF OCR to the first three pages. The current upload path does not reject a PDF solely because it has more than three pages. Objects are private and quarantined documents are never downloadable.
 
-An authorized download action creates a short-lived signed URL, five minutes by default. Signed URLs are not persisted or logged. Responses use no-store and no-referrer policies, attachment disposition, and MIME nosniff protection.
+An authorized POST download action creates a short-lived signed URL, five minutes by default and bounded to 1–15 minutes. Signed URLs are not persisted or logged. The JSON response uses `private, no-store`; object parameters request attachment disposition and the verified MIME type. Nginx applies MIME nosniff and a restrictive referrer policy to the application.
 
-Database and object storage cannot share a transaction. Uploads use compensating deletion when database persistence fails. Export generation uploads first and marks the request ready only afterward. Account deletion removes and verifies objects before deleting the final relational identity; retries are idempotent. Scheduled cleanup removes confirmed orphaned temporary/export objects.
+Database and object storage cannot share a transaction. Uploads use compensating deletion when database persistence fails. Claim/account exports read authorized objects into request-scoped temporary ZIP files and delete each temporary file after sending. Account deletion synchronously removes owned receipt objects before deleting sessions and relational identity; if storage deletion reports failure, relational deletion stops. The current code has no persisted asynchronous export object or scheduled orphan-cleanup subsystem.
 
 ## Consequences
 

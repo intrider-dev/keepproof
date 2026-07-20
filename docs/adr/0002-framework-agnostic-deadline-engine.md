@@ -22,7 +22,7 @@ Calendar behavior is explicit:
 - A deadline remains a local calendar date; delivery instants are derived later by the application.
 - Manual overrides win and are identified as such.
 
-The package receives exhaustive table-driven tests and property-style invariants for order, determinism, leap dates, month ends, and timezone transitions. Laravel maps request/database values to package value objects and persists result snapshots with the engine version.
+The package receives exhaustive table-driven tests and property-style invariants for order, determinism, leap dates, month ends, and timezone transitions. Laravel maps request/database values to package value objects and persists the effective date, source, rule summary, and explanation trace. The current schema does not persist an engine version, so a semantics change must include an explicit migration/recalculation decision.
 
 ## Consequences
 
