@@ -42,17 +42,19 @@ function changedFiles(expected, actual) {
 let exitCode = 0
 
 try {
-    const executable = join(
-        projectRoot,
-        'node_modules/.bin',
-        process.platform === 'win32' ? 'openapi-ts.cmd' : 'openapi-ts',
-    )
+    const executable = process.execPath
+    const generator = join(projectRoot, 'node_modules/@hey-api/openapi-ts/bin/run.js')
     const generation = spawnSync(
         executable,
-        ['-i', join(repositoryRoot, 'apps/backend/openapi/openapi.yaml'), '-o', temporaryOutput],
+        [
+            generator,
+            '-i',
+            join(repositoryRoot, 'apps/backend/openapi/openapi.yaml'),
+            '-o',
+            temporaryOutput,
+        ],
         {
             cwd: projectRoot,
-            shell: process.platform === 'win32',
             stdio: 'inherit',
         },
     )
