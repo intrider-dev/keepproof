@@ -255,6 +255,55 @@ final class ReceiptWorkflowTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_private_download_url_is_bounded_audited_and_contains_no_storage_key(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0010');
+        $this->process($document, new DeterministicFixtureExtractor);
+        Storage::disk('receipts')->buildTemporaryUrlsUsing(
+            fn (string $path, \DateTimeInterface $expiration, array $options): string => 'https://objects.keepproof.test/private-download',
+        );
+
+        $response = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertOk()
+            ->assertJsonPath('data.url', 'https://objects.keepproof.test/private-download');
+
+        self::assertStringNotContainsString($document->storage_key, (string) $response->getContent());
+        $expiresAt = $response->json('data.expires_at');
+        self::assertIsString($expiresAt);
+        self::assertLessThanOrEqual(
+            301,
+            now()->diffInSeconds($expiresAt, absolute: true),
+        );
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'receipt.download_url_created',
+            'subject_id' => $document->id,
+        ]);
+        $metadata = DB::table('audit_logs')
+            ->where('action', 'receipt.download_url_created')
+            ->value('metadata');
+        self::assertIsString($metadata);
+        self::assertStringNotContainsString($document->storage_key, $metadata);
+        self::assertStringNotContainsString('private-download', $metadata);
+    }
+
+    public function test_quarantined_or_deleted_original_never_receives_a_signed_url(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+        $document = $this->uploadImage($owner, $household, 'upload-proof-0011');
+        $document->update(['state' => DocumentState::Quarantined]);
+
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertNotFound();
+
+        $document->update(['state' => DocumentState::Failed, 'retain_original' => false]);
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/documents/'.$document->id.'/download')
+            ->assertNotFound();
+    }
+
     private function uploadImage(User $owner, Household $household, string $key): ReceiptDocument
     {
         $response = $this->actingAs($owner)
