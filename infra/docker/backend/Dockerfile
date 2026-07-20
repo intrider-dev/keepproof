@@ -59,7 +59,9 @@ WORKDIR /workspace/apps/backend
 COPY --from=development-dependencies --chown=app:app /workspace/apps/backend/vendor ./vendor
 COPY --chown=app:app apps/backend ./
 COPY --chown=app:app packages /workspace/packages
-RUN composer dump-autoload --optimize --no-interaction
+RUN mkdir -p /workspace/packages/deadline-engine/vendor \
+    && chown -R app:app /workspace/packages/deadline-engine \
+    && composer dump-autoload --optimize --no-interaction
 USER app
 
 EXPOSE 8000

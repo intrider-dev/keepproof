@@ -35,6 +35,8 @@ switch ($Task) {
         Initialize-EnvironmentFiles
         Invoke-Compose build backend frontend
         Invoke-Compose run --rm backend composer install --no-interaction --prefer-dist
+        Invoke-Compose run --rm --user root --workdir /workspace/packages/deadline-engine backend chown -R app:app vendor
+        Invoke-Compose run --rm --workdir /workspace/packages/deadline-engine backend composer install --no-interaction --prefer-dist
         Invoke-Compose run --rm frontend npm ci
         Invoke-Compose run --rm backend php artisan key:generate --force
         Invoke-Compose run --rm backend php artisan migrate --force

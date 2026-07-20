@@ -12,6 +12,8 @@ env:
 setup: env
 	$(COMPOSE) build backend frontend
 	$(BACKEND) composer install --no-interaction --prefer-dist
+	$(COMPOSE) run --rm --user root --workdir /workspace/packages/deadline-engine backend chown -R app:app vendor
+	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer install --no-interaction --prefer-dist
 	$(FRONTEND) npm ci
 	$(BACKEND) php artisan key:generate --force
 	$(BACKEND) php artisan migrate --force
