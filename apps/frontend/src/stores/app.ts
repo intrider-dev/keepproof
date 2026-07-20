@@ -95,8 +95,21 @@ const clearSession = (): void => {
   state.demoMode = false
   state.sessionChecked = true
   state.user.id = ''
+  state.user.name = ''
+  state.user.email = ''
   state.user.emailVerified = false
   state.user.householdId = ''
+  state.user.householdName = ''
+  state.user.timezone = 'UTC'
+  state.purchases = []
+  state.documents = []
+  state.members = []
+  state.notifications = []
+  state.scheduledReminders = []
+  state.preferences = clone(defaultNotificationPreferences)
+  toast.value = null
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = undefined
 }
 
 const signOut = async (): Promise<void> => {

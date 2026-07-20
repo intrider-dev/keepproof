@@ -137,6 +137,49 @@ final class PurchaseApiTest extends TestCase
         $this->assertDatabaseCount('purchases', 0);
     }
 
+    public function test_unvalidated_ownership_and_state_fields_cannot_be_mass_assigned(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        [$foreignUser, $foreignHousehold] = $this->householdWithOwner('Foreign');
+        $payload = $this->payload();
+        $payload['household_id'] = $foreignHousehold->id;
+        $payload['created_by_user_id'] = $foreignUser->id;
+        $payload['state'] = 'archived';
+        $payload['activated_at'] = '2000-01-01T00:00:00Z';
+
+        $response = $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/purchases', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.household_id', $household->id)
+            ->assertJsonPath('data.state', 'active');
+        $purchaseId = $response->json('data.id');
+        self::assertIsString($purchaseId);
+
+        $this->assertDatabaseHas('purchases', [
+            'id' => $purchaseId,
+            'household_id' => $household->id,
+            'created_by_user_id' => $owner->id,
+            'state' => 'active',
+        ]);
+        $this->assertDatabaseMissing('purchases', [
+            'id' => $purchaseId,
+            'household_id' => $foreignHousehold->id,
+        ]);
+    }
+
+    public function test_stored_xss_payload_is_serialized_as_inert_json_data(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Owner');
+        $payload = $this->payload();
+        $payload['notes'] = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
+
+        $this->actingAs($owner)
+            ->postJson('/api/v1/households/'.$household->id.'/purchases', $payload)
+            ->assertCreated()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertJsonPath('data.notes', $payload['notes']);
+    }
+
     public function test_purchase_payload_exposes_safe_document_metadata_without_storage_keys(): void
     {
         [$owner, $household] = $this->householdWithOwner('Owner');

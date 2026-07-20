@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -7,12 +7,18 @@ import StatusPill from '../components/StatusPill.vue'
 import { appStore } from '../stores/app'
 import { ApiProblem, apiDownload, apiRequest } from '../lib/api'
 import { downloadBlob, downloadTextFile } from '../lib/download'
+import { validatePasswordChange, type ValidationErrors } from '../validation'
 
 const exporting = ref(false)
 const exportReady = ref(false)
 const exportPassword = ref('')
 const exportError = ref('')
 const removeAfterExtraction = ref(false)
+const passwordForm = reactive({ currentPassword: '', password: '', passwordConfirmation: '' })
+const passwordErrors = ref<ValidationErrors>({})
+const passwordRequestError = ref('')
+const passwordChanged = ref(false)
+const changingPassword = ref(false)
 
 const exportAccount = async (): Promise<void> => {
   if (exporting.value) return
@@ -58,6 +64,40 @@ const exportAccount = async (): Promise<void> => {
         : 'The account export could not be prepared.'
   } finally {
     exporting.value = false
+  }
+}
+
+const changePassword = async (): Promise<void> => {
+  if (changingPassword.value || appStore.state.demoMode) return
+  passwordErrors.value = validatePasswordChange(
+    passwordForm.currentPassword,
+    passwordForm.password,
+    passwordForm.passwordConfirmation,
+  )
+  passwordRequestError.value = ''
+  passwordChanged.value = false
+  if (Object.keys(passwordErrors.value).length) return
+
+  changingPassword.value = true
+  try {
+    await apiRequest<void>('/me/password', {
+      method: 'PUT',
+      body: JSON.stringify({
+        current_password: passwordForm.currentPassword,
+        password: passwordForm.password,
+        password_confirmation: passwordForm.passwordConfirmation,
+      }),
+    })
+    passwordForm.currentPassword = ''
+    passwordForm.password = ''
+    passwordForm.passwordConfirmation = ''
+    passwordChanged.value = true
+    appStore.showToast('Password changed. Other sessions were signed out.')
+  } catch (caught) {
+    passwordRequestError.value =
+      caught instanceof ApiProblem ? caught.problem.detail : 'The password could not be changed.'
+  } finally {
+    changingPassword.value = false
   }
 }
 </script>
@@ -177,6 +217,72 @@ const exportAccount = async (): Promise<void> => {
           This demo preference is illustrative and does not delete fixture assets.
         </p>
       </section>
+
+      <form class="panel settings-section" novalidate @submit.prevent="changePassword">
+        <div class="panel__heading">
+          <div>
+            <p class="eyebrow">Account security</p>
+            <h2>Change your password</h2>
+          </div>
+          <AppIcon name="shield" />
+        </div>
+        <p>Changing your password keeps this session active and signs out every other session.</p>
+        <template v-if="!appStore.state.demoMode">
+          <label class="field">
+            <span>Current password</span>
+            <input
+              v-model="passwordForm.currentPassword"
+              class="input"
+              type="password"
+              autocomplete="current-password"
+              :aria-invalid="Boolean(passwordErrors.currentPassword)"
+            />
+            <small v-if="passwordErrors.currentPassword" class="field-error">{{
+              passwordErrors.currentPassword
+            }}</small>
+          </label>
+          <label class="field">
+            <span>New password</span>
+            <input
+              v-model="passwordForm.password"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              :aria-invalid="Boolean(passwordErrors.password)"
+            />
+            <small v-if="passwordErrors.password" class="field-error">{{
+              passwordErrors.password
+            }}</small>
+            <small v-else class="field-hint">Use at least 12 characters.</small>
+          </label>
+          <label class="field">
+            <span>Confirm new password</span>
+            <input
+              v-model="passwordForm.passwordConfirmation"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              :aria-invalid="Boolean(passwordErrors.passwordConfirmation)"
+            />
+            <small v-if="passwordErrors.passwordConfirmation" class="field-error">{{
+              passwordErrors.passwordConfirmation
+            }}</small>
+          </label>
+          <p v-if="passwordRequestError" class="form-alert" role="alert">
+            {{ passwordRequestError }}
+          </p>
+          <p v-if="passwordChanged" class="form-success" role="status">
+            Password changed and other sessions revoked.
+          </p>
+          <button class="button button--secondary" type="submit" :disabled="changingPassword">
+            <span v-if="changingPassword" class="spinner" aria-hidden="true"></span>
+            {{ changingPassword ? 'Changing password…' : 'Change password' }}
+          </button>
+        </template>
+        <p v-else class="field-hint">
+          Password changes are disabled in the browser-only synthetic demo.
+        </p>
+      </form>
     </div>
 
     <section class="panel data-map">

@@ -218,6 +218,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/UserResponse" }
         "422": { $ref: "#/components/responses/ValidationProblem" }
+  /api/v1/me/password:
+    put:
+      tags: [Account]
+      operationId: changePassword
+      summary: Change the current user's password and revoke other sessions.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password: { type: string, format: password }
+                password: { type: string, format: password, minLength: 12 }
+                password_confirmation: { type: string, format: password }
+      responses:
+        "204": { description: Password changed and other sessions revoked. }
+        "401": { $ref: "#/components/responses/AuthenticationProblem" }
+        "422": { $ref: "#/components/responses/ValidationProblem" }
+        "429": { $ref: "#/components/responses/RateLimitProblem" }
   /api/v1/account/export:
     get:
       tags: [Account, Exports]

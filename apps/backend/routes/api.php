@@ -44,6 +44,8 @@ Route::prefix('v1')->group(function (): void {
 
         Route::middleware('verified')->group(function (): void {
             Route::patch('/me', [ProfileController::class, 'update']);
+            Route::put('/me/password', [PasswordController::class, 'update'])
+                ->middleware('throttle:3,1');
 
             Route::get('/households', [HouseholdController::class, 'index']);
             Route::get('/households/{household}', [HouseholdController::class, 'show']);

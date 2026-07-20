@@ -589,6 +589,47 @@ export type UpdateProfileResponses = {
 
 export type UpdateProfileResponse = UpdateProfileResponses[keyof UpdateProfileResponses];
 
+export type ChangePasswordData = {
+    body: {
+        current_password: string;
+        password: string;
+        password_confirmation: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/me/password';
+};
+
+export type ChangePasswordErrors = {
+    /**
+     * Authentication is required.
+     */
+    401: ProblemDetails;
+    /**
+     * Request validation failed.
+     */
+    422: ProblemDetails & {
+        errors: {
+            [key: string]: Array<string>;
+        };
+    };
+    /**
+     * Rate limit exceeded.
+     */
+    429: ProblemDetails;
+};
+
+export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];
+
+export type ChangePasswordResponses = {
+    /**
+     * Password changed and other sessions revoked.
+     */
+    204: void;
+};
+
+export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
+
 export type ExportAccountData = {
     body?: never;
     path?: never;

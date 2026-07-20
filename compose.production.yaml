@@ -7,6 +7,10 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      SESSION_COOKIE: __Host-keepproof_session
+      SESSION_PATH: /
+      SESSION_SAME_SITE: lax
+      SESSION_SECURE_COOKIE: "true"
 
   queue-worker:
     build:

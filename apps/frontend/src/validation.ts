@@ -57,6 +57,24 @@ export const validatePasswordReset = (
   return errors
 }
 
+export const validatePasswordChange = (
+  currentPassword: string,
+  password: string,
+  passwordConfirmation: string,
+): ValidationErrors => {
+  const errors: ValidationErrors = {}
+  if (!currentPassword) errors.currentPassword = 'Enter your current password.'
+  if (password.length < 12) errors.password = 'Use at least 12 characters.'
+  if (password === currentPassword && password) {
+    errors.password = 'Choose a password different from your current password.'
+  }
+  if (passwordConfirmation !== password) {
+    errors.passwordConfirmation = 'Passwords must match.'
+  }
+
+  return errors
+}
+
 export const validateInviteEmail = (email: string): string | undefined =>
   emailPattern.test(email.trim()) ? undefined : 'Enter a valid email address.'
 

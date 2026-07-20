@@ -278,4 +278,46 @@ final class AuthenticationApiTest extends TestCase
         $this->assertNotNull(session('auth.password_confirmed_at'));
         $this->assertSame(1, AuditLog::query()->where('action', 'account.password_confirmed')->count());
     }
+
+    public function test_verified_user_can_change_password_and_revoke_other_database_sessions(): void
+    {
+        $user = User::factory()->create(['password' => 'Correct-Horse-42!']);
+        DB::table('sessions')->insert([
+            'id' => 'other-authenticated-session',
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Synthetic test session',
+            'payload' => base64_encode('synthetic'),
+            'last_activity' => time(),
+        ]);
+
+        $this->actingAs($user)->putJson('/api/v1/me/password', [
+            'current_password' => 'Correct-Horse-42!',
+            'password' => 'Replacement-Horse-84!',
+            'password_confirmation' => 'Replacement-Horse-84!',
+        ])->assertNoContent();
+
+        self::assertTrue(Hash::check('Replacement-Horse-84!', $user->refresh()->password));
+        $this->assertDatabaseMissing('sessions', ['id' => 'other-authenticated-session']);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'account.password_changed',
+            'actor_user_id' => $user->id,
+        ]);
+        self::assertNotNull(session('auth.password_confirmed_at'));
+    }
+
+    public function test_password_change_rejects_the_wrong_current_password_without_mutation(): void
+    {
+        $user = User::factory()->create(['password' => 'Correct-Horse-42!']);
+
+        $this->actingAs($user)->putJson('/api/v1/me/password', [
+            'current_password' => 'Wrong-Horse-42!',
+            'password' => 'Replacement-Horse-84!',
+            'password_confirmation' => 'Replacement-Horse-84!',
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.current_password.0', 'The current password is incorrect.');
+
+        self::assertTrue(Hash::check('Correct-Horse-42!', $user->refresh()->password));
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'account.password_changed']);
+    }
 }

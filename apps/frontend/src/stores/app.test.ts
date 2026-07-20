@@ -224,6 +224,31 @@ describe('connected application store', () => {
     expect(appStore.state.user.emailVerified).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('clears all user and household data from memory after sign out', async () => {
+    appStore.startDemo()
+    expect(appStore.state.purchases.length).toBeGreaterThan(0)
+    expect(appStore.state.user.email).toBe('demo@keepproof.local')
+
+    await appStore.signOut()
+
+    expect(appStore.state.isAuthenticated).toBe(false)
+    expect(appStore.state.demoMode).toBe(false)
+    expect(appStore.state.user).toMatchObject({
+      id: '',
+      name: '',
+      email: '',
+      emailVerified: false,
+      householdId: '',
+      householdName: '',
+      timezone: 'UTC',
+    })
+    expect(appStore.state.purchases).toEqual([])
+    expect(appStore.state.documents).toEqual([])
+    expect(appStore.state.members).toEqual([])
+    expect(appStore.state.notifications).toEqual([])
+    expect(appStore.state.scheduledReminders).toEqual([])
+  })
 })
 
 describe('demo household membership', () => {

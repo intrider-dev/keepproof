@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Accounts\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounts\Actions\ChangePassword;
+use App\Modules\Accounts\Http\Requests\ChangePasswordRequest;
 use App\Modules\Accounts\Http\Requests\ConfirmPasswordRequest;
 use App\Modules\Accounts\Http\Requests\ForgotPasswordRequest;
 use App\Modules\Accounts\Http\Requests\ResetPasswordRequest;
@@ -20,6 +22,21 @@ use Illuminate\Validation\ValidationException;
 
 final class PasswordController extends Controller
 {
+    public function update(ChangePasswordRequest $request, ChangePassword $changePassword): Response
+    {
+        $user = $this->authenticatedUser($request);
+        $changePassword->execute(
+            $user,
+            $request->currentPassword(),
+            $request->newPassword(),
+            $request->session()->getId(),
+        );
+        $request->session()->regenerate();
+        $request->session()->put('auth.password_confirmed_at', time());
+
+        return response()->noContent();
+    }
+
     public function forgot(ForgotPasswordRequest $request): JsonResponse
     {
         Password::sendResetLink(['email' => $request->email()]);

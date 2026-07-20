@@ -6,6 +6,7 @@ import {
   validateLogin,
   validateManualPurchase,
   validatePasswordReset,
+  validatePasswordChange,
   validateRegistration,
 } from './validation'
 
@@ -31,6 +32,21 @@ describe('authentication validation', () => {
       link: 'This password reset link is incomplete. Request a new one.',
       passwordConfirmation: 'Passwords must match.',
     })
+  })
+
+  it('requires the current password and a distinct confirmed replacement', () => {
+    expect(validatePasswordChange('', 'same-password', 'different')).toEqual({
+      currentPassword: 'Enter your current password.',
+      passwordConfirmation: 'Passwords must match.',
+    })
+    expect(
+      validatePasswordChange('Correct-Horse-42!', 'Correct-Horse-42!', 'Correct-Horse-42!'),
+    ).toEqual({
+      password: 'Choose a password different from your current password.',
+    })
+    expect(
+      validatePasswordChange('Correct-Horse-42!', 'Replacement-Horse-84!', 'Replacement-Horse-84!'),
+    ).toEqual({})
   })
 })
 

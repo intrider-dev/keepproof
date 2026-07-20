@@ -6,11 +6,16 @@ namespace App\Modules\Documents\Extraction;
 
 use App\Modules\Documents\Contracts\DocumentTextExtractor;
 use App\Modules\Documents\Data\ExtractedDocumentText;
+use App\Modules\Documents\Exceptions\PermanentDocumentFailure;
 use App\Modules\Documents\Exceptions\TransientDocumentFailure;
 use Illuminate\Support\Facades\Process;
 
 final class TesseractDocumentTextExtractor implements DocumentTextExtractor
 {
+    private const MAX_PAGE_OUTPUT_BYTES = 65_536;
+
+    private const MAX_DOCUMENT_OUTPUT_BYTES = 131_072;
+
     public function extract(string $binary, string $mimeType): ExtractedDocumentText
     {
         $source = tempnam(sys_get_temp_dir(), 'kp_receipt_');
@@ -46,10 +51,25 @@ final class TesseractDocumentTextExtractor implements DocumentTextExtractor
                     throw new TransientDocumentFailure('tesseract_failed');
                 }
 
-                $pages[] = trim($result->output());
+                $page = trim($result->output());
+                if (strlen($page) > self::MAX_PAGE_OUTPUT_BYTES) {
+                    throw new PermanentDocumentFailure(
+                        'ocr_output_too_large',
+                        'The receipt produced too much OCR text. Enter the purchase details manually.',
+                    );
+                }
+                $pages[] = $page;
             }
 
-            return new ExtractedDocumentText(trim(implode("\n\n", $pages)), 'tesseract-5.5');
+            $text = trim(implode("\n\n", $pages));
+            if (strlen($text) > self::MAX_DOCUMENT_OUTPUT_BYTES) {
+                throw new PermanentDocumentFailure(
+                    'ocr_output_too_large',
+                    'The receipt produced too much OCR text. Enter the purchase details manually.',
+                );
+            }
+
+            return new ExtractedDocumentText($text, 'tesseract-5.5');
         } finally {
             @unlink($source);
             foreach ($generated as $file) {
