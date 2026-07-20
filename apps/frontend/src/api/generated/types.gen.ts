@@ -206,6 +206,7 @@ export type ReceiptDocument = {
     ocr_provider?: string | null;
     extraction_provider?: string | null;
     prompt_version?: string | null;
+    external_ai_consent_granted: boolean;
     user_error?: string | null;
     retain_original: boolean;
     fields: Array<ExtractionField>;
@@ -1015,6 +1016,10 @@ export type UploadReceiptData = {
          */
         receipt: string;
         purchase_id?: Ulid | null;
+        /**
+         * Explicit consent to send redacted OCR text, never the original file, to a configured external extraction provider.
+         */
+        external_ai_consent?: boolean;
     };
     headers: {
         /**

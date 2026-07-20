@@ -8,11 +8,14 @@ use App\Modules\Documents\Contracts\ReceiptDataExtractor;
 use App\Modules\Documents\Data\ExtractedDocumentText;
 use App\Modules\Documents\Data\ExtractedField;
 use App\Modules\Documents\Data\ReceiptExtraction;
+use App\Modules\Documents\Data\ReceiptExtractionContext;
 
 final class ReceiptPatternExtractor implements ReceiptDataExtractor
 {
-    public function extract(ExtractedDocumentText $document): ReceiptExtraction
-    {
+    public function extract(
+        ExtractedDocumentText $document,
+        ReceiptExtractionContext $context,
+    ): ReceiptExtraction {
         $fields = [];
         $this->addTextField($fields, $document->text, 'merchant', 'MERCHANT', '0.9800');
         $this->addTextField($fields, $document->text, 'purchase_date', 'PURCHASE DATE', '0.9700');

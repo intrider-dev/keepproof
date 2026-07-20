@@ -468,6 +468,10 @@ paths:
                   oneOf:
                     - $ref: "#/components/schemas/Ulid"
                     - type: "null"
+                external_ai_consent:
+                  type: boolean
+                  default: false
+                  description: Explicit consent to send redacted OCR text, never the original file, to a configured external extraction provider.
       responses:
         "202":
           description: Private upload stored and validation queued.
@@ -1015,6 +1019,7 @@ components:
         - mime_type
         - size_bytes
         - processing_attempts
+        - external_ai_consent_granted
         - retain_original
         - fields
       properties:
@@ -1029,6 +1034,7 @@ components:
         ocr_provider: { type: [string, "null"] }
         extraction_provider: { type: [string, "null"] }
         prompt_version: { type: [string, "null"] }
+        external_ai_consent_granted: { type: boolean }
         user_error: { type: [string, "null"] }
         retain_original: { type: boolean }
         fields: { type: array, items: { $ref: "#/components/schemas/ExtractionField" } }

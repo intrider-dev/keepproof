@@ -37,6 +37,7 @@ final class ReceiptDocumentController extends Controller
             $household,
             $purchase,
             $request->receipt(),
+            $request->externalAiConsentGranted(),
             $request->idempotencyKey(),
             $request->correlationId(),
         );

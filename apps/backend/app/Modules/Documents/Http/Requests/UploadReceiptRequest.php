@@ -17,6 +17,7 @@ final class UploadReceiptRequest extends FormRequest
         return [
             'receipt' => ['required', File::types(['jpg', 'jpeg', 'png', 'pdf'])->max('10mb')],
             'purchase_id' => ['nullable', 'ulid'],
+            'external_ai_consent' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -35,6 +36,11 @@ final class UploadReceiptRequest extends FormRequest
         $value = $this->validated('purchase_id');
 
         return is_string($value) ? $value : null;
+    }
+
+    public function externalAiConsentGranted(): bool
+    {
+        return $this->boolean('external_ai_consent');
     }
 
     public function idempotencyKey(): string

@@ -56,6 +56,7 @@ final class ReceiptWorkflowTest extends TestCase
         $first->assertAccepted()
             ->assertJsonPath('data.state', 'validation_pending')
             ->assertJsonPath('data.filename', 'family receipt.jpg')
+            ->assertJsonPath('data.external_ai_consent_granted', false)
             ->assertJsonMissingPath('data.storage_key')
             ->assertJsonMissingPath('data.raw_ocr_text');
         $documentId = $first->json('data.id');
@@ -68,6 +69,7 @@ final class ReceiptWorkflowTest extends TestCase
         );
         self::assertStringNotContainsString('family', $document->storage_key);
         self::assertStringNotContainsString('..', $document->storage_key);
+        self::assertNull($document->external_ai_consent_at);
         Storage::disk('receipts')->assertExists($document->storage_key);
         Queue::assertPushed(ProcessReceipt::class, 1);
 
@@ -75,12 +77,37 @@ final class ReceiptWorkflowTest extends TestCase
             ->withHeader('Idempotency-Key', 'upload-proof-0001')
             ->post('/api/v1/households/'.$household->id.'/receipts', [
                 'receipt' => UploadedFile::fake()->image('different.png', 20, 20),
+                'external_ai_consent' => '1',
             ]);
 
-        $retry->assertAccepted()->assertJsonPath('data.id', $documentId);
+        $retry->assertAccepted()
+            ->assertJsonPath('data.id', $documentId)
+            ->assertJsonPath('data.external_ai_consent_granted', false);
         $this->assertDatabaseCount('receipt_documents', 1);
         $this->assertDatabaseCount('purchases', 1);
         Queue::assertPushed(ProcessReceipt::class, 1);
+    }
+
+    public function test_external_ai_consent_is_recorded_only_when_explicitly_granted(): void
+    {
+        [$owner, $household] = $this->householdWithOwner('Alex');
+
+        $response = $this->actingAs($owner)
+            ->withHeader('Idempotency-Key', 'upload-consent-0001')
+            ->post('/api/v1/households/'.$household->id.'/receipts', [
+                'receipt' => UploadedFile::fake()->image('receipt.png', 100, 100),
+                'external_ai_consent' => '1',
+            ])
+            ->assertAccepted()
+            ->assertJsonPath('data.external_ai_consent_granted', true);
+
+        $documentId = $response->json('data.id');
+        self::assertIsString($documentId);
+        self::assertNotNull(ReceiptDocument::query()->findOrFail($documentId)->external_ai_consent_at);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'receipt.uploaded',
+            'subject_id' => $documentId,
+        ]);
     }
 
     public function test_disguised_script_and_unsupported_svg_are_rejected_before_storage(): void

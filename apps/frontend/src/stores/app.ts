@@ -690,13 +690,14 @@ const restoreSession = async (): Promise<boolean> => {
 const delay = async (milliseconds: number): Promise<void> =>
   new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds))
 
-const uploadReceipt = async (file?: File): Promise<string> => {
+const uploadReceipt = async (file?: File, externalAiConsent = false): Promise<string> => {
   if (state.demoMode) return createSyntheticUpload()
   if (!file) throw new Error('Choose a receipt before starting extraction.')
   if (!state.user.householdId) throw new Error('No household is selected.')
 
   const body = new FormData()
   body.set('receipt', file)
+  body.set('external_ai_consent', externalAiConsent ? '1' : '0')
   const response = await apiRequest<ReceiptDocumentResponse>(
     `/households/${state.user.householdId}/receipts`,
     {

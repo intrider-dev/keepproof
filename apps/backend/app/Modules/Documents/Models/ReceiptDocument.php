@@ -32,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $ocr_provider
  * @property string|null $extraction_provider
  * @property string|null $prompt_version
+ * @property CarbonImmutable|null $external_ai_consent_at
  * @property int $processing_attempts
  * @property CarbonImmutable|null $processing_dispatched_at
  * @property string $correlation_id
@@ -68,6 +69,7 @@ final class ReceiptDocument extends Model
         'ocr_provider',
         'extraction_provider',
         'prompt_version',
+        'external_ai_consent_at',
         'processing_attempts',
         'processing_dispatched_at',
         'correlation_id',
@@ -114,6 +116,7 @@ final class ReceiptDocument extends Model
             'state' => DocumentState::class,
             'size_bytes' => 'integer',
             'raw_ocr_text' => 'encrypted',
+            'external_ai_consent_at' => 'immutable_datetime',
             'processing_attempts' => 'integer',
             'processing_dispatched_at' => 'immutable_datetime',
             'retain_original' => 'boolean',

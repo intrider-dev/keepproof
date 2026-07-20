@@ -36,6 +36,7 @@ final readonly class UploadReceipt
         Household $household,
         ?Purchase $purchase,
         UploadedFile $file,
+        bool $externalAiConsentGranted,
         string $idempotencyKey,
         string $correlationId,
     ): ReceiptDocument {
@@ -86,6 +87,7 @@ final readonly class UploadReceipt
                 $documentId,
                 $disk,
                 $storageKey,
+                $externalAiConsentGranted,
                 $correlationId,
                 $keyHash,
             ): ReceiptDocument {
@@ -117,6 +119,7 @@ final readonly class UploadReceipt
                     'processing_attempts' => 0,
                     'correlation_id' => $correlationId,
                     'retain_original' => true,
+                    'external_ai_consent_at' => $externalAiConsentGranted ? now() : null,
                 ]);
                 $this->transitionState->recordInitial($created, 'receipt_uploaded', $correlationId, [
                     'mime_type' => $receipt->mimeType,
@@ -139,6 +142,7 @@ final readonly class UploadReceipt
                 $this->audit->record('receipt.uploaded', $actor, $household, $created, [
                     'mime_type' => $receipt->mimeType,
                     'size_bytes' => $receipt->sizeBytes,
+                    'external_ai_consent_granted' => $externalAiConsentGranted,
                 ]);
 
                 return $created;

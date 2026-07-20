@@ -8,6 +8,7 @@ use App\Modules\Documents\Actions\TransitionDocumentState;
 use App\Modules\Documents\Actions\ValidateReceiptContent;
 use App\Modules\Documents\Contracts\DocumentTextExtractor;
 use App\Modules\Documents\Contracts\ReceiptDataExtractor;
+use App\Modules\Documents\Data\ReceiptExtractionContext;
 use App\Modules\Documents\Enums\DocumentState;
 use App\Modules\Documents\Exceptions\PermanentDocumentFailure;
 use App\Modules\Documents\Exceptions\TransientDocumentFailure;
@@ -109,7 +110,13 @@ final class ProcessReceipt implements ShouldQueue
             $validateContent->execute($binary, $document->mime_type, $document->sha256);
             $document->increment('processing_attempts');
             $text = $textExtractor->extract($binary, $document->mime_type);
-            $extraction = $dataExtractor->extract($text);
+            $extraction = $dataExtractor->extract(
+                $text,
+                new ReceiptExtractionContext(
+                    $document->id,
+                    $document->external_ai_consent_at !== null,
+                ),
+            );
 
             DB::transaction(function () use ($document, $text, $extraction, $transitionState): void {
                 $locked = ReceiptDocument::query()->lockForUpdate()->findOrFail($document->id);

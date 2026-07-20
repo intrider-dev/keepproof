@@ -7,9 +7,12 @@ namespace App\Providers;
 use App\Modules\Accounts\Models\User;
 use App\Modules\Documents\Contracts\DocumentTextExtractor;
 use App\Modules\Documents\Contracts\ReceiptDataExtractor;
+use App\Modules\Documents\Contracts\ReceiptTextRedactor;
+use App\Modules\Documents\Extraction\ConservativeReceiptTextRedactor;
 use App\Modules\Documents\Extraction\DeterministicFixtureExtractor;
 use App\Modules\Documents\Extraction\ManualEntryFallback;
 use App\Modules\Documents\Extraction\ReceiptPatternExtractor;
+use App\Modules\Documents\Extraction\SchemaValidatedLlmReceiptExtractor;
 use App\Modules\Documents\Extraction\TesseractDocumentTextExtractor;
 use App\Modules\Documents\Models\ReceiptDocument;
 use App\Modules\Documents\Policies\ReceiptDocumentPolicy;
@@ -21,6 +24,7 @@ use App\Modules\Shared\Configuration\FrontendUrl;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -28,6 +32,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Opis\JsonSchema\Validator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -53,9 +58,17 @@ class AppServiceProvider extends ServiceProvider
             return match (config('receipt_processing.data_extractor')) {
                 'patterns' => new ReceiptPatternExtractor,
                 'manual' => new ManualEntryFallback,
-                default => throw new \LogicException('RECEIPT_DATA_EXTRACTOR must be patterns or manual.'),
+                'llm' => new SchemaValidatedLlmReceiptExtractor(
+                    $this->app->make(HttpFactory::class),
+                    $this->app->make(ReceiptTextRedactor::class),
+                    new ReceiptPatternExtractor,
+                    new Validator,
+                    resource_path('schemas/receipt-extraction-response.schema.json'),
+                ),
+                default => throw new \LogicException('RECEIPT_DATA_EXTRACTOR must be patterns, manual, or llm.'),
             };
         });
+        $this->app->bind(ReceiptTextRedactor::class, ConservativeReceiptTextRedactor::class);
     }
 
     /**

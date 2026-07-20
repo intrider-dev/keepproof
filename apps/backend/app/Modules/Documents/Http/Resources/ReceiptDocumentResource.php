@@ -31,6 +31,7 @@ final class ReceiptDocumentResource extends JsonResource
             'ocr_provider' => $document->ocr_provider,
             'extraction_provider' => $document->extraction_provider,
             'prompt_version' => $document->prompt_version,
+            'external_ai_consent_granted' => $document->external_ai_consent_at !== null,
             'user_error' => $document->user_error,
             'retain_original' => $document->retain_original,
             'fields' => ExtractionFieldResource::collection($this->whenLoaded('fields')),

@@ -64,9 +64,9 @@ const processReceipt = async (): Promise<void> => {
   busy.value = true
   fileError.value = ''
   try {
-    const documentId = await appStore.uploadReceipt(selectedFile.value)
+    const documentId = await appStore.uploadReceipt(selectedFile.value, allowExternalAi.value)
     await router.push(`/app/review/${documentId}`)
-    appStore.showToast('Local extraction complete. Review the proposed values.', 'info')
+    appStore.showToast('Extraction complete. Review the proposed values.', 'info')
   } catch (error) {
     fileError.value = error instanceof Error ? error.message : 'Receipt processing failed.'
   } finally {
@@ -174,8 +174,8 @@ const processReceipt = async (): Promise<void> => {
       </div>
 
       <div class="processing-options">
-        <label class="choice-card choice-card--selected">
-          <input type="radio" name="processing" checked />
+        <label class="choice-card" :class="{ 'choice-card--selected': !allowExternalAi }">
+          <input v-model="allowExternalAi" type="radio" name="processing" :value="false" />
           <span class="choice-card__check"><AppIcon name="check" :size="17" /></span>
           <span
             ><strong>Process locally</strong
@@ -186,17 +186,31 @@ const processReceipt = async (): Promise<void> => {
           >
           <span class="recommended">Recommended</span>
         </label>
-        <label class="choice-card choice-card--disabled">
-          <input v-model="allowExternalAi" type="checkbox" disabled />
-          <span class="choice-card__check"></span>
+        <label
+          class="choice-card"
+          :class="{
+            'choice-card--selected': allowExternalAi,
+            'choice-card--disabled': appStore.state.demoMode,
+          }"
+        >
+          <input
+            v-model="allowExternalAi"
+            type="radio"
+            name="processing"
+            :value="true"
+            :disabled="appStore.state.demoMode"
+          />
+          <span class="choice-card__check"
+            ><AppIcon v-if="allowExternalAi" name="check" :size="17"
+          /></span>
           <span
             ><strong>Allow external AI for this document</strong
             ><small
-              >Unavailable in the local demo. Production use also requires an enabled provider and
-              redaction.</small
+              >Only redacted OCR text may be sent. This also requires a provider enabled by the
+              deployment operator.</small
             ></span
           >
-          <span class="status-label">Off</span>
+          <span class="status-label">{{ appStore.state.demoMode ? 'Demo: off' : 'Opt-in' }}</span>
         </label>
       </div>
 
@@ -209,7 +223,10 @@ const processReceipt = async (): Promise<void> => {
         <AppIcon name="arrow" />
         <div>
           <AppIcon name="shield" /><span
-            ><strong>Local worker</strong><small>No external request</small></span
+            ><strong>{{ allowExternalAi ? 'Configured AI provider' : 'Local worker' }}</strong
+            ><small>{{
+              allowExternalAi ? 'Redacted text only' : 'No external request'
+            }}</small></span
           >
         </div>
         <AppIcon name="arrow" />
@@ -223,7 +240,10 @@ const processReceipt = async (): Promise<void> => {
       <div class="wizard-actions">
         <button class="button button--quiet" type="button" @click="step = 1">Back</button>
         <button class="button button--primary" type="button" @click="step = 3">
-          Continue with local processing <AppIcon name="arrow" :size="18" />
+          {{
+            allowExternalAi ? 'Continue with explicit consent' : 'Continue with local processing'
+          }}
+          <AppIcon name="arrow" :size="18" />
         </button>
       </div>
     </section>
@@ -233,7 +253,7 @@ const processReceipt = async (): Promise<void> => {
         <span class="feature-icon feature-icon--large"><AppIcon name="spark" :size="27" /></span>
         <div>
           <p class="eyebrow">Step 3 of 3</p>
-          <h2 id="process-step-title">Ready for local extraction</h2>
+          <h2 id="process-step-title">Ready for extraction</h2>
           <p>
             KeepProof will create field-level results for you to review. No deadline is active yet.
           </p>
@@ -246,11 +266,19 @@ const processReceipt = async (): Promise<void> => {
         </div>
         <div>
           <dt>Processing</dt>
-          <dd>{{ appStore.state.demoMode ? 'Local fixture extractor' : 'Local OCR worker' }}</dd>
+          <dd>
+            {{
+              appStore.state.demoMode
+                ? 'Local fixture extractor'
+                : allowExternalAi
+                  ? 'External provider with schema validation'
+                  : 'Local OCR worker'
+            }}
+          </dd>
         </div>
         <div>
           <dt>External AI</dt>
-          <dd>Off</dd>
+          <dd>{{ allowExternalAi ? 'Explicitly allowed for this document' : 'Off' }}</dd>
         </div>
         <div>
           <dt>Next step</dt>
@@ -262,6 +290,11 @@ const processReceipt = async (): Promise<void> => {
         <p v-if="appStore.state.demoMode">
           <strong>Demo boundary</strong>The selected browser file is not uploaded or read. This
           explicit fixture demo uses deterministic synthetic extraction data.
+        </p>
+        <p v-else-if="allowExternalAi">
+          <strong>Consent boundary</strong>The original file stays in private storage. Only redacted
+          OCR text may be sent to the configured provider, and its response must pass a strict
+          schema before review.
         </p>
         <p v-else>
           <strong>Private processing</strong>The selected file is uploaded to private object
@@ -278,7 +311,7 @@ const processReceipt = async (): Promise<void> => {
           @click="processReceipt"
         >
           <span v-if="busy" class="spinner" aria-hidden="true"></span>
-          {{ busy ? 'Processing locally…' : 'Process receipt' }}
+          {{ busy ? 'Processing…' : 'Process receipt' }}
         </button>
       </div>
     </section>

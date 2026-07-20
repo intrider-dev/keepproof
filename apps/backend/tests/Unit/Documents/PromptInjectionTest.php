@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Documents;
 
 use App\Modules\Documents\Data\ExtractedDocumentText;
+use App\Modules\Documents\Data\ReceiptExtractionContext;
 use App\Modules\Documents\Extraction\ReceiptPatternExtractor;
 use PHPUnit\Framework\TestCase;
 
@@ -23,6 +24,7 @@ TEXT;
 
         $result = (new ReceiptPatternExtractor)->extract(
             new ExtractedDocumentText($text, 'prompt-injection-fixture'),
+            new ReceiptExtractionContext('fixture-document', false),
         );
         $byKey = [];
         foreach ($result->fields as $field) {

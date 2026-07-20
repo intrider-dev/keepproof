@@ -45,7 +45,7 @@ x-backend: &backend
     MAIL_FROM_ADDRESS: notifications@keepproof.local
     MAIL_FROM_NAME: KeepProof
     OCR_DRIVER: tesseract
-    EXTERNAL_AI_ENABLED: "false"
+    EXTERNAL_AI_ENABLED: ${EXTERNAL_AI_ENABLED:-false}
   volumes:
     - ./:/workspace
     - backend_vendor:/workspace/apps/backend/vendor
