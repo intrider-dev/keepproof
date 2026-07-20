@@ -10,6 +10,7 @@ COPY apps/frontend ./
 RUN npm run build
 
 FROM nginx:1.30.4-alpine3.24 AS production
+COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/production.conf /etc/nginx/conf.d/default.conf
 COPY --from=frontend-build /build/dist /var/www/frontend
 COPY apps/backend/public /var/www/backend/public
