@@ -57,8 +57,22 @@ switch ($Task) {
     }
     'e2e' {
         Initialize-EnvironmentFiles
-        Invoke-Compose up --detach --wait
-        Invoke-Compose --profile tools run --rm e2e
+        $PreviousAppUrl = $env:APP_URL
+        $PreviousFrontendUrl = $env:FRONTEND_URL
+        $PreviousOcrDriver = $env:OCR_DRIVER
+
+        try {
+            $env:APP_URL = 'http://nginx:8080'
+            $env:FRONTEND_URL = 'http://nginx:8080'
+            $env:OCR_DRIVER = 'fixture'
+            Invoke-Compose up --detach --wait
+            Invoke-Compose --profile tools run --rm e2e
+        }
+        finally {
+            $env:APP_URL = $PreviousAppUrl
+            $env:FRONTEND_URL = $PreviousFrontendUrl
+            $env:OCR_DRIVER = $PreviousOcrDriver
+        }
     }
     'seed' {
         Invoke-Compose run --rm backend php artisan migrate --force
@@ -71,7 +85,8 @@ switch ($Task) {
         Invoke-Compose run --rm backend php artisan migrate --force
         Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
         Invoke-Compose run --rm backend php artisan db:seed --force
-        Write-Output 'KeepProof: http://localhost:8080'
+        $AppPort = if ([string]::IsNullOrWhiteSpace($env:APP_PORT)) { '8080' } else { $env:APP_PORT }
+        Write-Output "KeepProof: http://localhost:$AppPort"
         Write-Output 'Mailpit: http://localhost:8025'
     }
     'logs' { Invoke-Compose logs --follow --tail=200 }

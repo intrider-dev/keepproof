@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(AssignCorrelationId::class);
         $middleware->statefulApi();
         $middleware->throttleApi('api');
+        $middleware->redirectGuestsTo(null);
         $middleware->alias(['password.recent' => RequireRecentPasswordConfirmation::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

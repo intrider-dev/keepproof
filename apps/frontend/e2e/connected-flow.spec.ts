@@ -9,6 +9,16 @@ interface HouseholdCollection {
   data: Array<{ id: string }>
 }
 
+const statefulHeaders = (page: Page): Record<string, string> => {
+  const origin = new URL(page.url()).origin
+
+  return {
+    Accept: 'application/json',
+    Origin: origin,
+    Referer: `${origin}/`,
+  }
+}
+
 const uniqueEmail = (label: string): string =>
   `e2e-${label}-${Date.now()}-${Math.random().toString(16).slice(2)}@keepproof.test`
 
@@ -75,7 +85,7 @@ const registerAndVerify = async (page: Page, name: string, email: string): Promi
   ).toBeVisible()
 
   const response = await page.request.get('/api/v1/households?per_page=10', {
-    headers: { Accept: 'application/json' },
+    headers: statefulHeaders(page),
   })
   expect(response.ok()).toBe(true)
   const households = (await response.json()) as HouseholdCollection
@@ -119,14 +129,16 @@ test.describe('connected receipt lifecycle', () => {
       await expect(
         ownerPage.getByRole('heading', { name: 'Check what KeepProof found' }),
       ).toBeVisible({ timeout: 75_000 })
-      await ownerPage.getByLabel('Purchase date').fill(purchaseDate)
+      await ownerPage
+        .getByRole('textbox', { name: 'Purchase date', exact: true })
+        .fill(purchaseDate)
       await ownerPage.getByRole('checkbox', { name: /I checked these values/ }).check()
       await ownerPage.getByRole('button', { name: 'Confirm purchase details' }).click()
 
       await expect(ownerPage.getByRole('heading', { name: 'Northstar Home' })).toBeVisible()
       await expect(ownerPage.getByText(displayDate(returnDeadline))).toBeVisible()
       const purchaseId = new URL(ownerPage.url()).pathname.split('/').at(-1)
-      expect(purchaseId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+      expect(purchaseId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/i)
 
       const calendarDownloadPromise = ownerPage.waitForEvent('download')
       await ownerPage.getByRole('button', { name: 'Add to calendar' }).click()
@@ -158,13 +170,13 @@ test.describe('connected receipt lifecycle', () => {
       await registerAndVerify(memberPage, 'Riley', uniqueEmail('outsider'))
 
       const hiddenHousehold = await memberPage.request.get(`/api/v1/households/${householdId}`, {
-        headers: { Accept: 'application/json' },
+        headers: statefulHeaders(memberPage),
       })
       expect(hiddenHousehold.status()).toBe(404)
 
       const hiddenPurchase = await memberPage.request.get(
         `/api/v1/households/${householdId}/purchases/${purchaseId}`,
-        { headers: { Accept: 'application/json' } },
+        { headers: statefulHeaders(memberPage) },
       )
       expect(hiddenPurchase.status()).toBe(404)
     } finally {

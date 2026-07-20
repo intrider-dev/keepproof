@@ -12,7 +12,7 @@ import type {
   ReceiptDocumentResponse,
   UserResponse,
 } from '../api/generated'
-import { ApiProblem, apiRequest } from '../lib/api'
+import { ApiProblem, apiRequest, createCorrelationId } from '../lib/api'
 import { minorToDecimal, parseMoneyToMinor } from '../lib/money'
 import {
   defaultNotificationPreferences,
@@ -729,7 +729,7 @@ const uploadReceipt = async (file?: File, externalAiConsent = false): Promise<st
     {
       method: 'POST',
       body,
-      headers: { 'Idempotency-Key': `upload-${crypto.randomUUID()}` },
+      headers: { 'Idempotency-Key': `upload-${createCorrelationId()}` },
     },
   )
 

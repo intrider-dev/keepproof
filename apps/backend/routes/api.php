@@ -36,10 +36,6 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:6,1');
         Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
             ->middleware('throttle:3,1');
-        Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
-            ->middleware(['signed', 'throttle:6,1'])
-            ->name('verification.verify');
-
         Route::get('/me', [ProfileController::class, 'show']);
 
         Route::middleware('verified')->group(function (): void {

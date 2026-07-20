@@ -181,7 +181,7 @@ final class AuthenticationApiTest extends TestCase
         $this->assertFalse($other->refresh()->hasVerifiedEmail());
     }
 
-    public function test_browser_email_verification_returns_to_the_spa(): void
+    public function test_browser_email_verification_uses_the_session_without_origin_headers(): void
     {
         $user = User::factory()->unverified()->create();
         $verificationUrl = URL::temporarySignedRoute(
@@ -192,10 +192,30 @@ final class AuthenticationApiTest extends TestCase
 
         $this->actingAs($user)
             ->withHeader('Accept', 'text/html')
+            ->withoutHeader('Origin')
+            ->withoutHeader('Referer')
             ->get($verificationUrl)
             ->assertRedirect('http://localhost:5173/verify-email?verified=1');
 
         $this->assertTrue($user->refresh()->hasVerifiedEmail());
+    }
+
+    public function test_guest_verification_navigation_returns_problem_details_instead_of_redirecting(): void
+    {
+        $user = User::factory()->unverified()->create();
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(10),
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+        );
+
+        $this->withHeader('Accept', 'text/html')
+            ->get($verificationUrl)
+            ->assertUnauthorized()
+            ->assertHeader('Content-Type', 'application/problem+json')
+            ->assertJsonPath('detail', 'Authentication is required for this request.');
+
+        $this->assertFalse($user->refresh()->hasVerifiedEmail());
     }
 
     public function test_password_reset_uses_a_single_use_broker_token(): void

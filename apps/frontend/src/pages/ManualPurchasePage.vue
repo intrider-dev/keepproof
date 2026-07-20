@@ -4,7 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import type { PurchaseInput } from '../api/generated'
 import AppIcon from '../components/AppIcon.vue'
 import PageHeader from '../components/PageHeader.vue'
-import { ApiProblem } from '../lib/api'
+import { ApiProblem, createCorrelationId } from '../lib/api'
 import { parseMoneyToMinor } from '../lib/money'
 import { appStore } from '../stores/app'
 import {
@@ -34,7 +34,7 @@ const dateInTimezone = (timezone: string): string => {
 }
 
 const createItem = (): DraftItem => ({
-  id: crypto.randomUUID(),
+  id: createCorrelationId(),
   name: '',
   quantity: '1',
   unitPrice: '',

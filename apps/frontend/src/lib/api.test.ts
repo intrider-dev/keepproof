@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiProblem, apiRequest, resetCsrfForTests } from './api'
+import { ApiProblem, apiRequest, createCorrelationId, resetCsrfForTests } from './api'
 
 describe('same-origin API client', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     resetCsrfForTests()
     document.cookie = 'XSRF-TOKEN=demo-csrf-token; path=/'
     vi.restoreAllMocks()
+  })
+
+  it('creates a UUID correlation ID when randomUUID is unavailable', () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (bytes: Uint8Array): Uint8Array => {
+        bytes.fill(0xab)
+
+        return bytes
+      },
+    })
+
+    expect(createCorrelationId()).toBe('abababab-abab-4bab-abab-abababababab')
   })
 
   it('initializes CSRF and sends credentialed unsafe requests', async () => {
