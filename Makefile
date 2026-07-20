@@ -15,7 +15,7 @@ setup: env
 	$(FRONTEND) npm ci
 	$(BACKEND) php artisan key:generate --force
 	$(BACKEND) php artisan migrate --force
-	$(BACKEND) php artisan storage:link --force
+	$(BACKEND) php artisan keepproof:storage:prepare --create
 
 up: env
 	$(COMPOSE) up --detach --wait
@@ -30,7 +30,7 @@ test:
 
 quality:
 	$(BACKEND) composer quality
-	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer quality
+	$(COMPOSE) run --rm --workdir /workspace/packages/deadline-engine backend composer check
 	$(FRONTEND) npm run quality
 
 e2e: up
@@ -38,6 +38,7 @@ e2e: up
 
 seed:
 	$(BACKEND) php artisan migrate --force
+	$(BACKEND) php artisan keepproof:storage:prepare --create
 	$(BACKEND) php artisan db:seed --force
 
 demo: seed up

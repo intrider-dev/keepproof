@@ -38,7 +38,7 @@ switch ($Task) {
         Invoke-Compose run --rm frontend npm ci
         Invoke-Compose run --rm backend php artisan key:generate --force
         Invoke-Compose run --rm backend php artisan migrate --force
-        Invoke-Compose run --rm backend php artisan storage:link --force
+        Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
     }
     'up' {
         Initialize-EnvironmentFiles
@@ -52,7 +52,7 @@ switch ($Task) {
     }
     'quality' {
         Invoke-Compose run --rm backend composer quality
-        Invoke-Compose run --rm --workdir /workspace/packages/deadline-engine backend composer quality
+        Invoke-Compose run --rm --workdir /workspace/packages/deadline-engine backend composer check
         Invoke-Compose run --rm frontend npm run quality
     }
     'e2e' {
@@ -62,12 +62,14 @@ switch ($Task) {
     }
     'seed' {
         Invoke-Compose run --rm backend php artisan migrate --force
+        Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
         Invoke-Compose run --rm backend php artisan db:seed --force
     }
     'demo' {
         Initialize-EnvironmentFiles
         Invoke-Compose up --detach --wait
         Invoke-Compose run --rm backend php artisan migrate --force
+        Invoke-Compose run --rm backend php artisan keepproof:storage:prepare --create
         Invoke-Compose run --rm backend php artisan db:seed --force
         Write-Output 'KeepProof: http://localhost:8080'
         Write-Output 'Mailpit: http://localhost:8025'
