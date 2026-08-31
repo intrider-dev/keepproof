@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Check out complete source history
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -70,7 +70,7 @@ jobs:
             > "artifacts/images-${{ steps.version.outputs.value }}.json"
 
       - name: Generate backend SPDX SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: keepproof/backend:${{ steps.version.outputs.value }}
           format: spdx-json
@@ -80,7 +80,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate web SPDX SBOM
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: keepproof/web:${{ steps.version.outputs.value }}
           format: spdx-json
@@ -131,7 +131,7 @@ jobs:
           )
 
       - name: Upload versioned build artifacts
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: keepproof-${{ steps.version.outputs.value }}
           path: artifacts/
